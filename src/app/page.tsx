@@ -1,65 +1,99 @@
-import Image from "next/image";
+import Link from "next/link";
+import { PostComposer } from "@/components/client";
+import { EmptyState, PostCard, SectionCard } from "@/components/server";
+import { getAppData } from "@/lib/data";
+import { joinClasses } from "@/lib/site";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+type HomeProps = {
+  searchParams: Promise<{ view?: string }>;
+};
+
+export default async function Home({ searchParams }: HomeProps) {
+  const params = await searchParams;
+  const view = params.view ?? "for-you";
+  const { viewer, feed, viewerGroups } = await getAppData();
+
+  const filteredFeed = feed.filter((post) => {
+    if (view === "clans") {
+      return post.author.type === "group";
+    }
+
+    if (view === "following" && viewer) {
+      return post.author.type === "user" && viewer.followingIds.includes(post.authorId);
+    }
+
+    return true;
+  });
+
+  const tabs = [
+    { key: "for-you", label: "Для вас", href: "/?view=for-you" },
+    { key: "clans", label: "Лента кланов", href: "/?view=clans" },
+    { key: "following", label: "Подписки", href: "/?view=following" },
+  ] as const;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex justify-center">
+      <div className="w-full max-w-[760px] px-4">
+        <div className="sticky top-16 z-30 mb-6 -mx-2 px-2 pb-3 pt-1 backdrop-blur lg:top-4">
+          <div className="flex justify-center rounded-[30px] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] py-2">
+            <div className="grid w-full max-w-[520px] grid-cols-1 gap-2 rounded-[26px] border border-[var(--line)] bg-[var(--panel-strong)] p-2 shadow-[0_16px_36px_-26px_rgba(0,0,0,0.85)] sm:grid-cols-3 sm:gap-1 sm:rounded-full">
+              {tabs.map((tab) => (
+                <Link
+                  key={tab.key}
+                  href={tab.href}
+                  className={joinClasses(
+                    "rounded-full px-4 py-3 text-center text-sm font-medium transition",
+                    view === tab.key
+                      ? "bg-white/[0.08] text-[var(--text)]"
+                      : "text-[var(--muted)] hover:bg-white/[0.03] hover:text-[var(--text)]",
+                  )}
+                >
+                  {tab.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <div className="mb-6">
+          {viewer ? (
+            <PostComposer groups={viewerGroups} />
+          ) : (
+            <SectionCard
+              title="Чтобы постить и собирать свой круг"
+              description="Авторизуйтесь, и на главной появится быстрый постинг прямо в ленте."
+            >
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/auth/register"
+                  className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90"
+                >
+                  Создать аккаунт
+                </Link>
+                <Link
+                  href="/auth/login"
+                  className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-semibold text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                >
+                  Войти
+                </Link>
+              </div>
+            </SectionCard>
+          )}
+        </div>
+
+        <div className="grid gap-4">
+          {filteredFeed.length ? (
+            filteredFeed.map((post) => <PostCard key={post.id} post={post} viewer={viewer} />)
+          ) : (
+            <EmptyState
+              title="Пока пусто"
+              description="В этом режиме ленты пока нет постов. Переключите вкладку или подпишитесь на людей."
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

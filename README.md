@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GLYPH
 
-## Getting Started
+GLYPH — минималистичная социальная платформа на `Next.js 16`, `React 19` и `MySQL`.
 
-First, run the development server:
+В проекте уже есть:
+- аккаунты и сессии через cookie;
+- профили с emoji-аватарами;
+- лента постов, лайки, комментарии и репосты;
+- кланы, вступление и публикация постов в кланы;
+- уведомления и realtime через `WebSocket`;
+- жалобы, верификация и админка;
+- базовая PWA-подготовка.
+
+## Локальный запуск
+
+1. Установите зависимости:
+
+```bash
+npm install
+```
+
+2. Создайте `.env.local` на основе `.env.example`.
+
+3. Поднимите MySQL и примените схему:
+
+```bash
+database/schema.sql
+```
+
+4. При необходимости импортируйте старые данные:
+
+```bash
+npm run db:import
+```
+
+5. Запустите проект:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Основные переменные окружения
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_REALTIME_URL=ws://localhost:3002/ws
+REALTIME_PORT=3002
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=nami_social
+```
 
-## Learn More
+## Подготовка к хостингу
 
-To learn more about Next.js, take a look at the following resources:
+Перед выкладкой нужно:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Указать публичный адрес сайта в `NEXT_PUBLIC_APP_URL`.
+2. Указать публичный адрес websocket-сервера в `NEXT_PUBLIC_REALTIME_URL`.
+3. Настроить MySQL-подключение через `DB_*`.
+4. Выполнить:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run build
+npm run start
+```
 
-## Deploy on Vercel
+Если хостинг разносит HTTP и `WebSocket` по разным портам или доменам, проект уже поддерживает это через `NEXT_PUBLIC_REALTIME_URL`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Проверка перед релизом
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run typecheck
+npm run lint
+```
