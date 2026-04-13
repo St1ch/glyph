@@ -31,6 +31,7 @@ import {
   txQueryRows,
   withTransaction,
 } from "@/lib/mysql";
+import { isMailConfigured, sendVerificationEmail } from "@/lib/mail";
 import { emitRealtimeEvent, queueRealtimeEvent } from "@/lib/realtime";
 
 const storageDir = path.join(process.cwd(), "storage");
@@ -1025,7 +1026,7 @@ export async function registerUser(input: RegisterInput) {
     throw new Error("Придумайте username для входа и профиля.");
   }
 
-  return withTransaction(async (connection) => {
+  const result = await withTransaction(async (connection) => {
     const existing = await txQueryRows<RowDataPacket & { id: string; email: string; handle: string }>(
       connection,
       `SELECT id, email, handle FROM users WHERE email = ? OR handle = ?`,
@@ -1099,6 +1100,19 @@ export async function registerUser(input: RegisterInput) {
 
     return { user, verificationLink: link };
   });
+
+  let delivery: "smtp" | "preview" = "preview";
+
+  if (isMailConfigured()) {
+    try {
+      await sendVerificationEmail(result.user.email, result.verificationLink);
+      delivery = "smtp";
+    } catch {
+      delivery = "preview";
+    }
+  }
+
+  return { ...result, delivery };
 }
 
 export async function verifyEmail(token: string) {
@@ -1157,7 +1171,7 @@ export async function loginUser(input: LoginInput) {
       `SELECT * FROM mail_previews WHERE email_to = ? ORDER BY created_at DESC LIMIT 1`,
       [user.email],
     );
-    const detail = preview ? ` Проверьте письмо: ${preview.link}` : "";
+    const detail = !isMailConfigured() && preview ? ` Проверьте письмо: ${preview.link}` : " Проверьте письмо в почте.";
     throw new Error(`Сначала подтвердите почту.${detail}`);
   }
 

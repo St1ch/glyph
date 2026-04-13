@@ -15,8 +15,11 @@ export async function POST(request: Request) {
     const result = await registerUser(payload);
 
     return NextResponse.json({
-      message: "Аккаунт создан.",
-      verificationLink: result.verificationLink,
+      message:
+        result.delivery === "smtp"
+          ? "Аккаунт создан. Письмо для подтверждения уже отправлено на почту."
+          : "Аккаунт создан. SMTP пока не настроен, поэтому используйте ссылку подтверждения ниже.",
+      verificationLink: result.delivery === "smtp" ? "" : result.verificationLink,
     });
   } catch (error) {
     return NextResponse.json(

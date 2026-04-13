@@ -1215,7 +1215,7 @@ export function AuthForm({
             return;
           }
 
-          setSuccess("Аккаунт создан. Подтвердите почту, затем войдите.");
+          setSuccess(response.message || "Аккаунт создан. Подтвердите почту, затем войдите.");
           setPreviewLink(response.verificationLink || "");
           event.currentTarget.reset();
         } catch (value) {

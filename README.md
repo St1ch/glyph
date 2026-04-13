@@ -51,6 +51,13 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=nami_social
+
+SMTP_HOST=smtp.timeweb.ru
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=no-reply@example.com
+SMTP_PASS=
+MAIL_FROM=no-reply@example.com
 ```
 
 ## Подготовка к хостингу
