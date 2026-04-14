@@ -81,18 +81,35 @@ async function requestJson<T>(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
-    ...init,
-  });
+      body: JSON.stringify(body),
+      ...init,
+    });
 
-  const data = (await response.json()) as T & RequestError;
+    const raw = await response.text();
+    let data: (T & RequestError) | null = null;
 
-  if (!response.ok) {
-    throw new Error(data.error || data.message || "Что-то пошло не так.");
+    if (raw) {
+      try {
+        data = JSON.parse(raw) as T & RequestError;
+      } catch {
+        data = null;
+      }
+    }
+
+    if (!response.ok) {
+      if (response.status === 504) {
+        throw new Error("Сервер слишком долго отвечает. Проверьте SMTP на сервере и попробуйте снова.");
+      }
+
+      throw new Error(data?.error || data?.message || "Что-то пошло не так.");
+    }
+
+    if (!data) {
+      throw new Error("Сервер вернул некорректный ответ.");
+    }
+
+    return data;
   }
-
-  return data;
-}
 
 function applyTheme(theme: ThemePreference) {
   const resolved =
