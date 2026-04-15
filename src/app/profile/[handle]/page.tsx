@@ -33,7 +33,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     );
   }
 
-  const { viewer, user, activeTab, posts, likedPosts } = data;
+  const { viewer, user, activeTab, contentLocked, posts, likedPosts } = data;
   const isOwn = viewer?.id === user.id;
   const isFollowing = viewer ? viewer.followingIds.includes(user.id) : false;
 
@@ -75,7 +75,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                 <div className="flex flex-wrap gap-2 rounded-[22px] bg-black/22 p-1.5 backdrop-blur-[2px] md:justify-end">
                   <ProfileSettingsModal user={user} />
                   <VerificationModal status={user.verificationStatus} />
-                  <SettingsModal />
+                  <SettingsModal user={user} />
                 </div>
               ) : (
                 <FollowButton handle={user.handle} isFollowing={isFollowing} />
@@ -118,7 +118,12 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
       {isOwn ? <PostComposer compact /> : null}
 
       <div className="grid gap-4">
-        {currentItems.length ? (
+        {contentLocked ? (
+          <EmptyState
+            title="Приватный профиль"
+            description="Посты и лайки этого пользователя видны только его подписчикам."
+          />
+        ) : currentItems.length ? (
           currentItems.map((post) => <PostCard key={post.id} post={post} viewer={viewer} />)
         ) : (
           <EmptyState

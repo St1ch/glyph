@@ -97,3 +97,29 @@ export async function sendVerificationEmail(to: string, verificationLink: string
     `,
   });
 }
+
+export async function sendPasswordResetEmail(to: string, resetLink: string) {
+  await sendMail({
+    to,
+    subject: "Смена пароля в GLYPH",
+    text: `Перейдите по ссылке, чтобы задать новый пароль: ${resetLink}`,
+    html: `
+      <div style="background:#111111;padding:32px 16px;font-family:Arial,sans-serif;color:#f5f5f5;">
+        <div style="max-width:560px;margin:0 auto;background:#1a1a1a;border:1px solid #2e2e2e;border-radius:24px;padding:32px;">
+          <div style="font-size:28px;font-weight:700;letter-spacing:0.04em;">GLYPH</div>
+          <h1 style="margin:24px 0 12px;font-size:28px;line-height:1.2;">Смена пароля</h1>
+          <p style="margin:0 0 20px;font-size:16px;line-height:1.7;color:#b9b9b9;">
+            Если вы запросили смену пароля, перейдите по кнопке ниже и задайте новый пароль для аккаунта.
+          </p>
+          <a href="${resetLink}" style="display:inline-block;padding:14px 22px;border-radius:999px;background:#84b82c;color:#111111;text-decoration:none;font-weight:700;">
+            Изменить пароль
+          </a>
+          <p style="margin:20px 0 0;font-size:14px;line-height:1.7;color:#8b8b8b;">
+            Если вы не запрашивали смену пароля, просто проигнорируйте это письмо.<br />
+            Прямая ссылка: <a href="${resetLink}" style="color:#b8df62;word-break:break-all;">${resetLink}</a>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}

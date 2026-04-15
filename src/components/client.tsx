@@ -1298,6 +1298,69 @@ export function AuthForm({
   );
 }
 
+export function PasswordResetForm({ token }: { token: string }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setPending(true);
+        setError("");
+        setSuccess("");
+
+        const formData = new FormData(event.currentTarget);
+        const password = String(formData.get("password") || "");
+        const confirmPassword = String(formData.get("confirmPassword") || "");
+
+        if (password !== confirmPassword) {
+          setPending(false);
+          setError("Пароли не совпадают.");
+          return;
+        }
+
+        try {
+          const response = await requestJson<{ message?: string }>("/api/auth/password-reset/confirm", {
+            token,
+            password,
+          });
+          setSuccess(response.message || "Пароль успешно изменён.");
+          event.currentTarget.reset();
+          window.setTimeout(() => {
+            router.push("/auth/login");
+            router.refresh();
+          }, 1200);
+        } catch (value) {
+          setError(value instanceof Error ? value.message : "Не удалось изменить пароль.");
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      <label className="grid gap-2 text-sm">
+        <span className="text-[var(--muted)]">Новый пароль</span>
+        <input name="password" type="password" required minLength={8} placeholder="••••••••" className={fieldClass} />
+      </label>
+
+      <label className="grid gap-2 text-sm">
+        <span className="text-[var(--muted)]">Повторите пароль</span>
+        <input name="confirmPassword" type="password" required minLength={8} placeholder="••••••••" className={fieldClass} />
+      </label>
+
+      {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
+      {success ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div> : null}
+
+      <button type="submit" disabled={pending} className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90 disabled:opacity-50">
+        {pending ? "Сохраняем..." : "Сохранить новый пароль"}
+      </button>
+    </form>
+  );
+}
+
 export function RealtimeBridge({ viewerId }: { viewerId: string }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -2012,19 +2075,52 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: () => void 
   );
 }
 
-export function SettingsModal() {
+export function SettingsModal({ user }: { user: User }) {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
-  const [theme, setTheme] = useState<ThemePreference>(() => {
-    if (typeof window === "undefined") return "system";
-    return (window.localStorage.getItem("glyph-theme") as ThemePreference | null) || "system";
-  });
-  const [notifications, setNotifications] = useState(true);
-  const [privateProfile, setPrivateProfile] = useState(false);
+  const [theme, setTheme] = useState<ThemePreference>(user.themePreference);
+  const [notifications, setNotifications] = useState(user.notificationsEnabled);
+  const [privateProfile, setPrivateProfile] = useState(user.privateProfile);
+  const [pending, setPending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [passwordPending, setPasswordPending] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    setTheme(user.themePreference);
+    setNotifications(user.notificationsEnabled);
+    setPrivateProfile(user.privateProfile);
+  }, [user.themePreference, user.notificationsEnabled, user.privateProfile]);
+
+  const saveSettings = async (next: {
+    themePreference: ThemePreference;
+    notificationsEnabled: boolean;
+    privateProfile: boolean;
+  }) => {
+    setPending(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await requestJson("/api/account/settings", next);
+      setTheme(next.themePreference);
+      setNotifications(next.notificationsEnabled);
+      setPrivateProfile(next.privateProfile);
+      applyTheme(next.themePreference);
+      setSuccess("Настройки сохранены.");
+      router.refresh();
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Не удалось сохранить настройки.");
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <>
@@ -2036,51 +2132,136 @@ export function SettingsModal() {
           <div className="grid gap-3">
             <h3 className="text-sm font-semibold text-[var(--text)]">Тема оформления</h3>
             <div className="grid w-full grid-cols-1 gap-2 rounded-[24px] bg-[var(--panel-strong)] p-2 sm:grid-cols-3 sm:gap-1 sm:rounded-full">
-              {(["dark", "light", "system"] as const).map((item) => (
+                {(["dark", "light", "system"] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => saveSettings({
+                      themePreference: item,
+                      notificationsEnabled: notifications,
+                      privateProfile,
+                    })}
+                    className={joinClasses(toggleBase, theme === item ? "bg-white/[0.08] text-[var(--text)]" : "text-[var(--muted)]")}
+                  >
+                    {item === "dark" ? "Тёмная" : item === "light" ? "Светлая" : "Системная"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[var(--panel-soft)] p-4">
+              <div>
+                <div className="text-sm font-medium text-[var(--text)]">Уведомления</div>
+                <div className="text-xs text-[var(--muted)]">Получать уведомления в системе и всплывающие оповещения</div>
+              </div>
+              <Switch
+                checked={notifications}
+                onChange={() =>
+                  saveSettings({
+                    themePreference: theme,
+                    notificationsEnabled: !notifications,
+                    privateProfile,
+                  })
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[var(--panel-soft)] p-4">
+              <div>
+                <div className="text-sm font-medium text-[var(--text)]">Приватный профиль</div>
+                <div className="text-xs text-[var(--muted)]">Только ваши подписчики смогут видеть посты и лайки профиля</div>
+              </div>
+              <Switch
+                checked={privateProfile}
+                onChange={() =>
+                  saveSettings({
+                    themePreference: theme,
+                    notificationsEnabled: notifications,
+                    privateProfile: !privateProfile,
+                  })
+                }
+              />
+            </div>
+
+            {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
+            {success ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div> : null}
+
+            <div className="border-t border-[var(--line)]" />
+
+            <div className="grid gap-3">
+              <h3 className="text-sm font-semibold text-[var(--text)]">Аккаунт</h3>
+              <LogoutButton />
+              <button
+                type="button"
+                disabled={passwordPending}
+                onClick={async () => {
+                  setPasswordPending(true);
+                  setError("");
+                  setSuccess("");
+
+                  try {
+                    const response = await requestJson<{ message?: string }>("/api/account/password-reset", {});
+                    setSuccess(response.message || "Письмо для смены пароля отправлено.");
+                  } catch (value) {
+                    setError(value instanceof Error ? value.message : "Не удалось отправить письмо для смены пароля.");
+                  } finally {
+                    setPasswordPending(false);
+                  }
+                }}
+                className="w-full rounded-xl border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-3 text-left text-sm text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)] disabled:opacity-50"
+              >
+                {passwordPending ? "Отправляем письмо..." : "Изменить пароль"}
+              </button>
+              {!confirmDelete ? (
                 <button
-                  key={item}
                   type="button"
-                  onClick={() => {
-                    setTheme(item);
-                    applyTheme(item);
-                    router.refresh();
-                  }}
-                  className={joinClasses(toggleBase, theme === item ? "bg-white/[0.08] text-[var(--text)]" : "text-[var(--muted)]")}
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-left text-sm text-rose-400 hover:bg-rose-500/20"
                 >
-                  {item === "dark" ? "Тёмная" : item === "light" ? "Светлая" : "Системная"}
+                  Удалить аккаунт
                 </button>
-              ))}
+              ) : (
+                <div className="grid gap-3 rounded-[20px] border border-rose-500/20 bg-rose-500/10 p-4">
+                  <div className="text-sm leading-6 text-rose-300">
+                    Аккаунт будет удалён вместе с вашими постами, комментариями, лайками и сессиями. Это действие нельзя отменить.
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletePending}
+                      onClick={async () => {
+                        setDeletePending(true);
+                        setError("");
+
+                        try {
+                          await requestJson("/api/account/delete", {});
+                          window.location.href = "/";
+                        } catch (value) {
+                          setError(value instanceof Error ? value.message : "Не удалось удалить аккаунт.");
+                        } finally {
+                          setDeletePending(false);
+                        }
+                      }}
+                      className="rounded-full bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      {deletePending ? "Удаляем..." : "Подтвердить удаление"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[var(--panel-soft)] p-4">
-            <div>
-              <div className="text-sm font-medium text-[var(--text)]">Уведомления</div>
-              <div className="text-xs text-[var(--muted)]">Получать уведомления о лайках и подписках</div>
-            </div>
-            <Switch checked={notifications} onChange={() => setNotifications(!notifications)} />
-          </div>
-
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[var(--panel-soft)] p-4">
-            <div>
-              <div className="text-sm font-medium text-[var(--text)]">Приватный профиль</div>
-              <div className="text-xs text-[var(--muted)]">Только одобренные подписчики видят посты</div>
-            </div>
-            <Switch checked={privateProfile} onChange={() => setPrivateProfile(!privateProfile)} />
-          </div>
-
-          <div className="border-t border-[var(--line)]" />
-
-          <div className="grid gap-3">
-            <h3 className="text-sm font-semibold text-[var(--text)]">Аккаунт</h3>
-            <LogoutButton />
-            <button className="w-full rounded-xl border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-3 text-left text-sm text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]">Изменить пароль</button>
-            <button className="w-full rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-left text-sm text-rose-400 hover:bg-rose-500/20">Удалить аккаунт</button>
-          </div>
-        </div>
-      </Modal>
-    </>
-  );
+        </Modal>
+      </>
+    );
 }
 
 export function AdminDeletePostButton({ postId }: { postId: string }) {

@@ -22,6 +22,8 @@ export type User = {
   followingIds: string[];
   likedPostIds: string[];
   themePreference: ThemePreference;
+  notificationsEnabled: boolean;
+  privateProfile: boolean;
   verificationStatus: VerificationStatus;
   isAdmin: boolean;
 };

@@ -31,7 +31,7 @@ import {
   txQueryRows,
   withTransaction,
 } from "@/lib/mysql";
-import { isMailConfigured, sendVerificationEmail } from "@/lib/mail";
+import { isMailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/mail";
 import { emitRealtimeEvent, queueRealtimeEvent } from "@/lib/realtime";
 
 const storageDir = path.join(process.cwd(), "storage");
@@ -58,6 +58,12 @@ type ProfileUpdateInput = {
   avatarEmoji: string;
   coverImagePath: string;
   themePreference: User["themePreference"];
+};
+
+type AccountSettingsInput = {
+  themePreference: User["themePreference"];
+  notificationsEnabled: boolean;
+  privateProfile: boolean;
 };
 
 type CreatePostInput = {
@@ -99,6 +105,8 @@ type UserRow = RowDataPacket & {
   created_at: Date | string;
   verified_email_at: Date | string | null;
   theme_preference: User["themePreference"];
+  notifications_enabled: number;
+  private_profile: number;
   verification_status: User["verificationStatus"];
 };
 
@@ -184,6 +192,14 @@ type VerificationTokenRow = RowDataPacket & {
   created_at: Date | string;
 };
 
+type PasswordResetTokenRow = RowDataPacket & {
+  token: string;
+  user_id: string;
+  expires_at: Date | string;
+  created_at: Date | string;
+  used_at: Date | string | null;
+};
+
 type VerificationRequestRow = RowDataPacket & {
   id: string;
   user_id: string;
@@ -264,14 +280,16 @@ function mapUser(row: UserRow, relations?: {
     coverImage: row.cover_image,
     createdAt: toIso(row.created_at)!,
     verifiedEmailAt: toIso(row.verified_email_at),
-    followerIds: relations?.followerIds ?? [],
-    followingIds: relations?.followingIds ?? [],
-    likedPostIds: relations?.likedPostIds ?? [],
-    themePreference: row.theme_preference,
-    verificationStatus: row.verification_status,
-    isAdmin: isAdminHandle(row.handle),
-  };
-}
+      followerIds: relations?.followerIds ?? [],
+      followingIds: relations?.followingIds ?? [],
+      likedPostIds: relations?.likedPostIds ?? [],
+      themePreference: row.theme_preference,
+      notificationsEnabled: Boolean(row.notifications_enabled),
+      privateProfile: Boolean(row.private_profile),
+      verificationStatus: row.verification_status,
+      isAdmin: isAdminHandle(row.handle),
+    };
+  }
 
 function mapGroup(row: GroupRow, memberIds: string[] = []): Group {
   return {
@@ -369,6 +387,48 @@ function assertAdmin(user: User | null): asserts user is User {
   if (!user || !user.isAdmin) {
     throw new Error("Недостаточно прав для доступа в админку.");
   }
+}
+
+function canAccessPrivateProfile(viewer: User | null, user: User) {
+  if (!user.privateProfile) {
+    return true;
+  }
+
+  if (!viewer) {
+    return false;
+  }
+
+  if (viewer.id === user.id || viewer.isAdmin) {
+    return true;
+  }
+
+  return viewer.followingIds.includes(user.id);
+}
+
+async function collectPostCascadeIds(connection: PoolConnection, seedPostIds: string[]) {
+  const idsToDelete = new Set<string>(seedPostIds);
+  let frontier = [...seedPostIds];
+
+  while (frontier.length) {
+    const rows = await txQueryRows<PostRow>(
+      connection,
+      `SELECT * FROM posts WHERE repost_of_post_id IN (${placeholders(frontier)})`,
+      frontier,
+    );
+
+    const nextFrontier: string[] = [];
+
+    for (const row of rows) {
+      if (!idsToDelete.has(row.id)) {
+        idsToDelete.add(row.id);
+        nextFrontier.push(row.id);
+      }
+    }
+
+    frontier = nextFrontier;
+  }
+
+  return [...idsToDelete];
 }
 
 async function getFollowRelations(userId: string) {
@@ -490,6 +550,29 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
       : Promise.resolve([]),
   ]);
 
+  const viewerRow =
+    viewerId && !userAuthors.some((row) => row.id === viewerId)
+      ? await queryOne<UserRow>(`SELECT * FROM users WHERE id = ?`, [viewerId])
+      : userAuthors.find((row) => row.id === viewerId) ?? null;
+  const viewerIsAdmin = Boolean(viewerRow && isAdminHandle(viewerRow.handle));
+  const privateAuthorIds = [...new Set(
+    userAuthors
+      .filter((row) => row.private_profile)
+      .map((row) => row.id),
+  )];
+  const accessiblePrivateAuthorIds = viewerId && privateAuthorIds.length
+    ? new Set(
+        (
+          await queryRows<FollowRow>(
+            `SELECT follower_user_id, following_user_id
+             FROM follows
+             WHERE follower_user_id = ? AND following_user_id IN (${placeholders(privateAuthorIds)})`,
+            [viewerId, ...privateAuthorIds],
+          )
+        ).map((row) => row.following_user_id),
+      )
+    : new Set<string>();
+
   const userMap = new Map(userAuthors.map((row) => [row.id, row]));
   const groupMap = new Map(groupAuthors.map((row) => [row.id, row]));
   const likeMap = new Map<string, string[]>();
@@ -558,6 +641,15 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
         throw new Error("Автор поста не найден");
       }
 
+       if (
+        row.private_profile &&
+        !viewerIsAdmin &&
+        viewerId !== row.id &&
+        !accessiblePrivateAuthorIds.has(row.id)
+      ) {
+        continue;
+      }
+
       author = {
         type: "user",
         handle: row.handle,
@@ -620,7 +712,19 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
   return posts.map((post) => decoratedMap.get(post.id)!).filter(Boolean);
 }
 
-async function insertNotification(connection: PoolConnection, notification: Notification) {
+async function insertNotification(
+  connection: PoolConnection,
+  notification: Notification,
+  options?: { force?: boolean },
+) {
+  if (!options?.force) {
+    const recipient = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [notification.userId]);
+
+    if (!recipient || !recipient.notifications_enabled) {
+      return;
+    }
+  }
+
   await txExecute(
     connection,
     `INSERT INTO notifications (id, user_id, title, description, link, created_at, is_read)
@@ -962,13 +1066,17 @@ export async function getProfileData(handle: string, tab: string) {
     return null;
   }
 
+  const canAccessContent = canAccessPrivateProfile(viewer, user);
+
   const [posts, likedPosts, verificationRequestRow] = await Promise.all([
-    getDecoratedPosts(`WHERE author_type = 'user' AND author_id = ?`, [user.id], viewer?.id),
-    getDecoratedPosts(
-      `WHERE id IN (SELECT post_id FROM post_likes WHERE user_id = ?)`,
-      [user.id],
-      viewer?.id,
-    ),
+    canAccessContent ? getDecoratedPosts(`WHERE author_type = 'user' AND author_id = ?`, [user.id], viewer?.id) : Promise.resolve([] as DecoratedPost[]),
+    canAccessContent
+      ? getDecoratedPosts(
+          `WHERE id IN (SELECT post_id FROM post_likes WHERE user_id = ?)`,
+          [user.id],
+          viewer?.id,
+        )
+      : Promise.resolve([] as DecoratedPost[]),
     queryOne<VerificationRequestRow>(
       `SELECT * FROM verification_requests WHERE user_id = ? AND status = 'pending' ORDER BY submitted_at DESC LIMIT 1`,
       [user.id],
@@ -979,6 +1087,7 @@ export async function getProfileData(handle: string, tab: string) {
     viewer,
     user,
     activeTab: tab === "likes" ? "likes" : "posts",
+    contentLocked: !canAccessContent,
     posts,
     likedPosts,
     verificationRequest: verificationRequestRow ? mapVerificationRequest(verificationRequestRow) : null,
@@ -1060,6 +1169,8 @@ export async function registerUser(input: RegisterInput) {
       followingIds: [],
       likedPostIds: [],
       themePreference: "system" as const,
+      notificationsEnabled: true,
+      privateProfile: false,
       verificationStatus: "none" as const,
       isAdmin: isAdminHandle(handle),
     };
@@ -1067,8 +1178,8 @@ export async function registerUser(input: RegisterInput) {
     await txExecute(
       connection,
       `INSERT INTO users
-       (id, handle, name, email, password_hash, bio, avatar_type, avatar_value, cover_image, created_at, verified_email_at, theme_preference, verification_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, handle, name, email, password_hash, bio, avatar_type, avatar_value, cover_image, created_at, verified_email_at, theme_preference, notifications_enabled, private_profile, verification_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
       [
         user.id,
         user.handle,
@@ -1082,6 +1193,8 @@ export async function registerUser(input: RegisterInput) {
         now,
         null,
         user.themePreference,
+        1,
+        0,
         user.verificationStatus,
       ],
     );
@@ -1140,10 +1253,11 @@ export async function verifyEmail(token: string) {
     const now = new Date();
     await txExecute(connection, `UPDATE users SET verified_email_at = ? WHERE id = ?`, [now, userRow.id]);
     await txExecute(connection, `DELETE FROM verification_tokens WHERE token = ?`, [token]);
-    await insertNotification(
-      connection,
-      buildNotification(userRow.id, "Почта подтверждена", "Теперь можно войти в аккаунт и публиковать посты.", "/auth/login"),
-    );
+      await insertNotification(
+        connection,
+        buildNotification(userRow.id, "Почта подтверждена", "Теперь можно войти в аккаунт и публиковать посты.", "/auth/login"),
+        { force: true },
+      );
 
     return mapUser({ ...userRow, verified_email_at: now }, { followerIds: [], followingIds: [], likedPostIds: [] });
   });
@@ -1191,7 +1305,11 @@ export async function createSession(userId: string) {
   });
 }
 
-export async function destroySession(token: string) {
+export async function destroySession(token: string | null) {
+  if (!token) {
+    return;
+  }
+
   await execute(`DELETE FROM sessions WHERE token = ?`, [token]);
 }
 
@@ -1386,17 +1504,18 @@ export async function deletePostAsAdmin(postId: string, adminUserId: string) {
     )];
 
     for (const affectedUserId of affectedUserIds) {
-      await insertNotification(
-        connection,
-        buildNotification(
-          affectedUserId,
-          "Пост удалён модератором",
-          deleteIds.length > 1
-            ? "Модерация удалила пост и связанные с ним репосты."
-            : "Одна из ваших публикаций была удалена из ленты модерацией.",
-          `/profile/${admin.handle}`,
-        ),
-      );
+        await insertNotification(
+          connection,
+          buildNotification(
+            affectedUserId,
+            "Пост удалён модератором",
+            deleteIds.length > 1
+              ? "Модерация удалила пост и связанные с ним репосты."
+              : "Одна из ваших публикаций была удалена из ленты модерацией.",
+            `/profile/${admin.handle}`,
+          ),
+          { force: true },
+        );
     }
 
     queueRealtimeEvent(connection, {
@@ -1482,6 +1601,7 @@ export async function reportPost(
           `${reporter.name} отправил(а) жалобу категории «${getReportCategoryLabel(category)}».`,
           "/admin",
         ),
+        { force: true },
       );
     }
 
@@ -1717,6 +1837,126 @@ export async function updateProfile(userId: string, input: ProfileUpdateInput) {
   return updated;
 }
 
+export async function updateAccountSettings(userId: string, input: AccountSettingsInput) {
+  await execute(
+    `UPDATE users
+     SET theme_preference = ?, notifications_enabled = ?, private_profile = ?
+     WHERE id = ?`,
+    [
+      input.themePreference,
+      input.notificationsEnabled ? 1 : 0,
+      input.privateProfile ? 1 : 0,
+      userId,
+    ],
+  );
+
+  const updated = await getFullUserById(userId);
+
+  if (!updated) {
+    throw new Error("Пользователь не найден.");
+  }
+
+  await emitRealtimeEvent({
+    type: "profile:changed",
+    recipients: [userId],
+    payload: {
+      userId,
+    },
+  });
+
+  return updated;
+}
+
+export async function requestPasswordResetForUser(userId: string) {
+  const user = await getFullUserById(userId);
+
+  if (!user) {
+    throw new Error("Пользователь не найден.");
+  }
+
+  const token = randomBytes(24).toString("hex");
+  const now = new Date();
+  const resetLink = `${getBaseUrl()}/auth/reset-password?token=${token}`;
+
+  await withTransaction(async (connection) => {
+    await txExecute(connection, `DELETE FROM password_reset_tokens WHERE user_id = ? OR expires_at <= NOW(3)`, [user.id]);
+    await txExecute(
+      connection,
+      `INSERT INTO password_reset_tokens (token, user_id, expires_at, created_at, used_at)
+       VALUES (?, ?, ?, ?, NULL)`,
+      [token, user.id, new Date(Date.now() + 60 * 60 * 1000), now],
+    );
+  });
+
+  await sendPasswordResetEmail(user.email, resetLink);
+
+  return { ok: true };
+}
+
+export async function resetPasswordByToken(token: string, nextPassword: string) {
+  return withTransaction(async (connection) => {
+    const resetToken = await txQueryOne<PasswordResetTokenRow>(
+      connection,
+      `SELECT * FROM password_reset_tokens WHERE token = ?`,
+      [token],
+    );
+
+    if (!resetToken || resetToken.used_at) {
+      throw new Error("Ссылка смены пароля недействительна.");
+    }
+
+    if (new Date(resetToken.expires_at) < new Date()) {
+      throw new Error("Ссылка смены пароля уже истекла.");
+    }
+
+    const user = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [resetToken.user_id]);
+
+    if (!user) {
+      throw new Error("Пользователь не найден.");
+    }
+
+    await txExecute(connection, `UPDATE users SET password_hash = ? WHERE id = ?`, [hashSync(nextPassword, 10), user.id]);
+    await txExecute(connection, `UPDATE password_reset_tokens SET used_at = ? WHERE token = ?`, [new Date(), token]);
+    await txExecute(connection, `DELETE FROM sessions WHERE user_id = ?`, [user.id]);
+  });
+
+  return { ok: true };
+}
+
+export async function deleteAccount(userId: string) {
+  return withTransaction(async (connection) => {
+    const user = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [userId]);
+
+    if (!user) {
+      throw new Error("Пользователь не найден.");
+    }
+
+    const ownPostRows = await txQueryRows<PostRow>(
+      connection,
+      `SELECT * FROM posts WHERE author_type = 'user' AND author_id = ?`,
+      [user.id],
+    );
+    const deleteIds = ownPostRows.length ? await collectPostCascadeIds(connection, ownPostRows.map((row) => row.id)) : [];
+
+    if (deleteIds.length) {
+      await txExecute(connection, `DELETE FROM posts WHERE id IN (${placeholders(deleteIds)})`, deleteIds);
+    }
+
+    await txExecute(connection, `DELETE FROM password_reset_tokens WHERE user_id = ?`, [user.id]);
+    await txExecute(connection, `DELETE FROM users WHERE id = ?`, [user.id]);
+  });
+
+  await emitRealtimeEvent({
+    type: "profile:changed",
+    recipients: [userId],
+    payload: {
+      userId,
+    },
+  });
+
+  return { ok: true };
+}
+
 export async function toggleFollow(targetHandle: string, viewerId: string) {
   return withTransaction(async (connection) => {
     const target = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE handle = ?`, [targetHandle]);
@@ -1880,6 +2120,7 @@ export async function submitVerification(input: VerificationInput): Promise<Veri
     await insertNotification(
       connection,
       buildNotification(user.id, "Заявка отправлена", "Видео и описание сохранены. После модерации рядом с именем появится галочка.", `/profile/${user.handle}`),
+      { force: true },
     );
 
     queueRealtimeEvent(connection, {
@@ -1925,17 +2166,18 @@ export async function reviewVerificationRequest(
     const user = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [requestRow.user_id]);
 
     if (user) {
-      await insertNotification(
-        connection,
-        buildNotification(
-          user.id,
-          decision === "approved" ? "Верификация одобрена" : "Верификация отклонена",
-          decision === "approved"
-            ? "Модерация одобрила вашу заявку. Галочка уже появилась в профиле."
-            : "Модерация отклонила заявку. Можно подать новую позже с более подробным описанием.",
-          `/profile/${user.handle}`,
-        ),
-      );
+        await insertNotification(
+          connection,
+          buildNotification(
+            user.id,
+            decision === "approved" ? "Верификация одобрена" : "Верификация отклонена",
+            decision === "approved"
+              ? "Модерация одобрила вашу заявку. Галочка уже появилась в профиле."
+              : "Модерация отклонила заявку. Можно подать новую позже с более подробным описанием.",
+            `/profile/${user.handle}`,
+          ),
+          { force: true },
+        );
 
       queueRealtimeEvent(connection, {
         type: "profile:changed",
@@ -1978,6 +2220,7 @@ export async function revokeVerification(userId: string, adminUserId: string) {
         "Модерация отозвала галочку у профиля. При необходимости можно подать новую заявку.",
         `/profile/${user.handle}`,
       ),
+      { force: true },
     );
 
     queueRealtimeEvent(connection, {

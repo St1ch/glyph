@@ -57,7 +57,7 @@ export default async function RootLayout({
           {themeScript}
         </Script>
         {viewer ? <RealtimeBridge viewerId={viewer.id} /> : null}
-        {viewer ? <DesktopSiteNotifications viewerId={viewer.id} /> : null}
+        {viewer ? <DesktopSiteNotifications viewerId={viewer.id} enabled={viewer.notificationsEnabled} /> : null}
 
         <header className="fixed inset-x-0 top-0 z-40 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
           <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-4 py-3">

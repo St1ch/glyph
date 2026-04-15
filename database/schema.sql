@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
   created_at DATETIME(3) NOT NULL,
   verified_email_at DATETIME(3) NULL,
   theme_preference ENUM('light', 'dark', 'system') NOT NULL DEFAULT 'system',
+  notifications_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  private_profile TINYINT(1) NOT NULL DEFAULT 0,
   verification_status ENUM('none', 'pending', 'approved') NOT NULL DEFAULT 'none'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -159,6 +161,16 @@ CREATE TABLE IF NOT EXISTS verification_requests (
   status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
   KEY verification_requests_user_idx (user_id, submitted_at),
   CONSTRAINT verification_requests_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  token VARCHAR(128) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL,
+  expires_at DATETIME(3) NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  used_at DATETIME(3) NULL,
+  KEY password_reset_tokens_user_idx (user_id, created_at),
+  CONSTRAINT password_reset_tokens_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS mail_previews (
