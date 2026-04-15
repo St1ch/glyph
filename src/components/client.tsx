@@ -1202,19 +1202,20 @@ export function AuthForm({
       action={mode === "login" ? "/auth/login/submit" : undefined}
       method={mode === "login" ? "post" : undefined}
       className="grid gap-4"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setPending(true);
-        setError("");
-        setSuccess("");
-        setPreviewLink("");
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setPending(true);
+          setError("");
+          setSuccess("");
+          setPreviewLink("");
 
-        const formData = new FormData(event.currentTarget);
-        const payload =
-          mode === "login"
-            ? {
-                login: formData.get("login"),
-                password: formData.get("password"),
+          const form = event.currentTarget;
+          const formData = new FormData(form);
+          const payload =
+            mode === "login"
+              ? {
+                  login: formData.get("login"),
+                  password: formData.get("password"),
               }
             : {
                 name: formData.get("name"),
@@ -1230,16 +1231,16 @@ export function AuthForm({
             router.push("/");
             router.refresh();
             return;
-          }
+            }
 
-          setSuccess(response.message || "Аккаунт создан. Подтвердите почту, затем войдите.");
-          setPreviewLink(response.verificationLink || "");
-          event.currentTarget.reset();
-        } catch (value) {
-          setError(value instanceof Error ? value.message : "Не удалось отправить форму.");
-        } finally {
-          setPending(false);
-        }
+            setSuccess(response.message || "Аккаунт создан. Подтвердите почту, затем войдите.");
+            setPreviewLink(response.verificationLink || "");
+            form.reset();
+          } catch (value) {
+            setError(value instanceof Error ? value.message : "Не удалось отправить форму.");
+          } finally {
+            setPending(false);
+          }
       }}
     >
       <div>
