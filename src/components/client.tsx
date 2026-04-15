@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import type { AdminPostReport, DecoratedPost, DecoratedPostComment, ThemePreference, User, VerificationStatus } from "@/lib/types";
-import { formatRelativeDate, joinClasses } from "@/lib/site";
+import { formatRelativeDate, imageTypes, joinClasses, uploadLimits, verificationVideoTypes } from "@/lib/site";
 import { EmojiPicker } from "@/components/emoji-picker";
 export { MobileNavBar } from "@/components/mobile-nav-bar";
 
@@ -52,7 +52,37 @@ type RealtimeIncomingEvent =
       };
     };
 
+function getUploadLimitText(kind: "avatar" | "cover" | "post" | "verification") {
+  const maxMb = Math.round(uploadLimits[kind] / (1024 * 1024));
+
+  if (kind === "verification") {
+    return `Максимальный размер видео — ${maxMb} МБ. Поддерживаются форматы: ${verificationVideoTypes.join(", ")}.`;
+  }
+
+  if (kind === "avatar") {
+    return `Максимальный размер изображения для аватара — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP и GIF.`;
+  }
+
+  if (kind === "cover") {
+    return `Максимальный размер изображения для обложки — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP и GIF.`;
+  }
+
+  return `Максимальный размер изображения — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP и GIF.`;
+}
+
 async function uploadFile(file: File, kind: "avatar" | "cover" | "post" | "verification") {
+  if (kind === "verification") {
+    if (!verificationVideoTypes.includes(file.type as (typeof verificationVideoTypes)[number])) {
+      throw new Error("Поддерживаются только видео MP4, WebM или MOV.");
+    }
+  } else if (!imageTypes.includes(file.type as (typeof imageTypes)[number])) {
+    throw new Error("Поддерживаются только изображения JPG, PNG, WEBP и GIF.");
+  }
+
+  if (file.size > uploadLimits[kind]) {
+    throw new Error(getUploadLimitText(kind));
+  }
+
   const formData = new FormData();
   formData.append("file", file);
   formData.append("kind", kind);
@@ -62,10 +92,27 @@ async function uploadFile(file: File, kind: "avatar" | "cover" | "post" | "verif
     body: formData,
   });
 
-  const data = (await response.json()) as { path?: string; error?: string };
+  const raw = await response.text();
+  let data: { path?: string; error?: string } | null = null;
 
-  if (!response.ok || !data.path) {
-    throw new Error(data.error || "Не удалось загрузить файл.");
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as { path?: string; error?: string };
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    if (response.status === 413) {
+      throw new Error(getUploadLimitText(kind));
+    }
+
+    throw new Error(data?.error || "Не удалось загрузить файл. Проверьте формат и размер файла.");
+  }
+
+  if (!data?.path) {
+    throw new Error("Сервер вернул некорректный ответ при загрузке файла.");
   }
 
   return data.path;

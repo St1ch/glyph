@@ -12,6 +12,30 @@ function isAllowed(kind: string, file: File) {
   return imageTypes.includes(file.type as (typeof imageTypes)[number]);
 }
 
+function getUploadError(kind: string, type: "format" | "size") {
+  if (type === "format") {
+    if (kind === "verification") {
+      return "Поддерживаются только видео MP4, WebM или MOV.";
+    }
+
+    return "Поддерживаются только изображения JPG, PNG, WEBP и GIF.";
+  }
+
+  if (kind === "verification") {
+    return "Видео слишком большое. Максимальный размер — 50 МБ.";
+  }
+
+  if (kind === "avatar") {
+    return "Изображение слишком большое. Максимальный размер для аватара — 5 МБ.";
+  }
+
+  if (kind === "cover") {
+    return "Изображение слишком большое. Максимальный размер для обложки — 8 МБ.";
+  }
+
+  return "Изображение слишком большое. Максимальный размер — 8 МБ.";
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -27,13 +51,13 @@ export async function POST(request: Request) {
     }
 
     if (!isAllowed(kind, file)) {
-      throw new Error("Формат файла не поддерживается.");
+      throw new Error(getUploadError(kind, "format"));
     }
 
     const maxSize = uploadLimits[kind as keyof typeof uploadLimits];
 
     if (file.size > maxSize) {
-      throw new Error("Файл превышает допустимый размер.");
+      throw new Error(getUploadError(kind, "size"));
     }
 
     const relativePath = await saveUpload(file, kind);
