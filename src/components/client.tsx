@@ -105,7 +105,11 @@ async function uploadFile(file: File, kind: "avatar" | "cover" | "post" | "verif
 
   if (!response.ok) {
     if (response.status === 413) {
-      throw new Error(getUploadLimitText(kind));
+      if (file.size > uploadLimits[kind]) {
+        throw new Error(getUploadLimitText(kind));
+      }
+
+      throw new Error("Файл подходит по формату и размеру для приложения, но сервер отклонил загрузку из-за своего лимита. Нужно увеличить лимит загрузки на сервере.");
     }
 
     throw new Error(data?.error || "Не удалось загрузить файл. Проверьте формат и размер файла.");
