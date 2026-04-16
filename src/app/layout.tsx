@@ -119,26 +119,20 @@ export default async function RootLayout({
             </div>
 
             {viewer ? (
-              <div className="grid gap-3">
-                <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel)] p-4 shadow-[0_24px_60px_-45px_rgba(0,0,0,0.85)]">
-                  <Link href={`/profile/${viewer.handle}`} className="flex items-center gap-3">
-                    <AvatarBubble avatar={viewer.avatar} name={viewer.name} size="sm" />
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{viewer.name}</div>
-                      <div className="truncate text-xs text-[var(--muted)]">@{viewer.handle}</div>
-                    </div>
-                  </Link>
-                </div>
-                <SidebarFooter canOpenBetaInfo />
+              <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel)] p-4 shadow-[0_24px_60px_-45px_rgba(0,0,0,0.85)]">
+                <Link href={`/profile/${viewer.handle}`} className="flex items-center gap-3">
+                  <AvatarBubble avatar={viewer.avatar} name={viewer.name} size="sm" />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{viewer.name}</div>
+                    <div className="truncate text-xs text-[var(--muted)]">@{viewer.handle}</div>
+                  </div>
+                </Link>
               </div>
             ) : (
-              <div className="grid gap-3">
-                <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel)] p-4 shadow-[0_24px_60px_-45px_rgba(0,0,0,0.85)]">
-                  <div className="text-sm leading-6 text-[var(--muted)]">
-                    Войдите, чтобы публиковать посты, подписываться на людей и управлять своим профилем.
-                  </div>
+              <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel)] p-4 shadow-[0_24px_60px_-45px_rgba(0,0,0,0.85)]">
+                <div className="text-sm leading-6 text-[var(--muted)]">
+                  Войдите, чтобы публиковать посты, подписываться на людей и управлять своим профилем.
                 </div>
-                <SidebarFooter />
               </div>
             )}
           </aside>
@@ -148,6 +142,7 @@ export default async function RootLayout({
           </main>
         </div>
 
+        <SidebarFooter canOpenBetaInfo={Boolean(viewer)} />
         <CookieNotice />
         <MobileNavBar
           items={siteConfig.navigation}
