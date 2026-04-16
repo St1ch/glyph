@@ -241,7 +241,7 @@ export function CookieNotice() {
   }
 
   return (
-    <div className="fixed bottom-6 left-6 z-[88] hidden w-[340px] rounded-[24px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black_4%)] p-4 shadow-[0_24px_60px_-35px_rgba(0,0,0,0.9)] lg:block">
+    <div className="fixed inset-x-4 bottom-4 z-[88] rounded-[24px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black_4%)] p-4 shadow-[0_24px_60px_-35px_rgba(0,0,0,0.9)] sm:bottom-6 sm:left-6 sm:right-auto sm:w-[340px]">
       <div className="text-sm font-semibold text-[var(--text)]">Файлы cookie</div>
       <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
         Сайт использует cookie для входа в аккаунт, сохранения сессии, темы оформления и стабильной работы realtime-функций.
@@ -2205,7 +2205,7 @@ export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: b
 
   return (
     <div className="fixed bottom-6 right-8 z-30 hidden items-end gap-2 text-right xl:flex xl:flex-col">
-      <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
+      <div className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-[var(--muted)]">
         {links.map((item, index) => (
           <div key={item.label} className="flex items-center gap-2">
             <Link
@@ -2221,18 +2221,20 @@ export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: b
             ) : null}
           </div>
         ))}
+      </div>
+      <div className="flex items-center justify-end gap-3 text-[10px] leading-5">
         {canOpenBetaInfo ? (
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event("glyph:open-beta-welcome"))}
-            className="ml-2 rounded-full border border-[color:color-mix(in_srgb,var(--accent)_55%,var(--line))] bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]"
+            className="rounded-full border border-[color:color-mix(in_srgb,var(--accent)_55%,var(--line))] bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]"
           >
             Бета-инфо
           </button>
         ) : null}
-      </div>
-      <div className="text-[10px] leading-5 text-[color:color-mix(in_srgb,var(--muted)_86%,transparent)]">
-        © 2026 GLYPH
+        <div className="text-[color:color-mix(in_srgb,var(--muted)_86%,transparent)]">
+          © 2026 GLYPH
+        </div>
       </div>
     </div>
   );

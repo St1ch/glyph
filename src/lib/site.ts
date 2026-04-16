@@ -8,7 +8,7 @@
     { href: "/", label: "Лента", icon: "feed" },
     { href: "/search", label: "Поиск", icon: "search" },
     { href: "/notifications", label: "Уведомления", icon: "bell" },
-    { href: "/messages", label: "Сообщения", icon: "message" },
+    { href: "/messages", label: "Сообщения · скоро", icon: "message" },
   ],
 } as const;
 

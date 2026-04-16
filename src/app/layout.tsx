@@ -25,7 +25,7 @@ const handjet = Handjet({
 export const metadata: Metadata = {
   title: {
     default: "GLYPH",
-    template: "%s · GLYPH",
+    template: "%s В· GLYPH",
   },
   description: siteConfig.description,
 };
