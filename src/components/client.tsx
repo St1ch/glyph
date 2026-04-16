@@ -1425,11 +1425,32 @@ export function BetaWelcomeModal({
     () => false,
   );
   const [dismissed, setDismissed] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const open = () => {
+      setManualOpen(true);
+      setDismissed(false);
+    };
+
+    window.addEventListener("glyph:open-beta-welcome", open);
+
+    return () => {
+      window.removeEventListener("glyph:open-beta-welcome", open);
+    };
+  }, []);
 
   const isOpen =
-    isClient &&
-    !dismissed &&
-    window.localStorage.getItem(`glyph-beta-welcome:${viewerId}`) !== "seen";
+    manualOpen ||
+    (
+      isClient &&
+      !dismissed &&
+      window.localStorage.getItem(`glyph-beta-welcome:${viewerId}`) !== "seen"
+    );
 
   if (!isOpen) {
     return null;
@@ -1441,6 +1462,7 @@ export function BetaWelcomeModal({
       onClose={() => {
         window.localStorage.setItem(`glyph-beta-welcome:${viewerId}`, "seen");
         setDismissed(true);
+        setManualOpen(false);
       }}
       title="Добро пожаловать в beta"
     >
@@ -1486,6 +1508,7 @@ export function BetaWelcomeModal({
             onClick={() => {
               window.localStorage.setItem(`glyph-beta-welcome:${viewerId}`, "seen");
               setDismissed(true);
+              setManualOpen(false);
             }}
             className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90"
           >
@@ -2169,6 +2192,56 @@ function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; onClose:
       </div>
     </div>,
     document.body,
+  );
+}
+
+export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: boolean }) {
+  const links = [
+    { href: "/", label: "Главная" },
+    { href: "/search", label: "Поиск" },
+    { href: "https://t.me/ISt1chl", label: "Telegram" },
+    { href: "https://github.com/St1ch/glyph", label: "GitHub" },
+  ] as const;
+
+  return (
+    <div className="rounded-[24px] border border-[var(--line)] bg-[linear-gradient(160deg,rgba(255,255,255,0.035),rgba(255,255,255,0.01))] p-4 shadow-[0_24px_60px_-45px_rgba(0,0,0,0.85)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold tracking-tight text-[var(--text)]">GLYPH</div>
+          <div className="text-xs text-[var(--muted)]">Минималистичная социальная платформа</div>
+        </div>
+        <div className="rounded-full border border-[var(--line)] bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">
+          beta
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {links.map((item) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            target={item.href.startsWith("http") ? "_blank" : undefined}
+            rel={item.href.startsWith("http") ? "noreferrer" : undefined}
+            className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-white/[0.04] hover:text-[var(--text)]"
+          >
+            {item.label}
+          </Link>
+        ))}
+        {canOpenBetaInfo ? (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("glyph:open-beta-welcome"))}
+            className="rounded-full border border-[color:color-mix(in_srgb,var(--accent)_45%,var(--line))] bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] px-3 py-1.5 text-[11px] font-medium text-[var(--accent)] transition hover:opacity-90"
+          >
+            Бета-инфо
+          </button>
+        ) : null}
+      </div>
+
+      <div className="mt-4 text-[11px] leading-5 text-[var(--muted)]">
+        © 2026 GLYPH. Во время бета-теста предложения и баг-репорты принимаются в Telegram.
+      </div>
+    </div>
   );
 }
 
