@@ -1284,7 +1284,7 @@ export function AuthForm({
             return;
             }
 
-            setSuccess(response.message || "Аккаунт создан. Подтвердите почту, затем войдите.");
+            setSuccess(response.message || "Аккаунт создан. Подтвердите почту, затем войдите. Если письма нет, проверьте папку «Спам».");
             setPreviewLink(response.verificationLink || "");
             form.reset();
           } catch (value) {

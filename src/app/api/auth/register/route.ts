@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message:
         result.delivery === "smtp"
-          ? "Аккаунт создан. Письмо для подтверждения уже отправлено на почту."
+          ? "Аккаунт создан. Письмо для подтверждения уже отправлено на почту. Если его нет во входящих, проверьте папку «Спам»."
           : "Аккаунт создан. SMTP пока не настроен, поэтому используйте ссылку подтверждения ниже.",
       verificationLink: result.delivery === "smtp" ? "" : result.verificationLink,
     });
