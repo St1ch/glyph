@@ -1412,6 +1412,91 @@ export function PasswordResetForm({ token }: { token: string }) {
   );
 }
 
+export function BetaWelcomeModal({
+  viewerId,
+  viewerName,
+}: {
+  viewerId: string;
+  viewerName: string;
+}) {
+  const isClient = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
+  const [dismissed, setDismissed] = useState(false);
+
+  const isOpen =
+    isClient &&
+    !dismissed &&
+    window.localStorage.getItem(`glyph-beta-welcome:${viewerId}`) !== "seen";
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={() => {
+        window.localStorage.setItem(`glyph-beta-welcome:${viewerId}`, "seen");
+        setDismissed(true);
+      }}
+      title="Добро пожаловать в beta"
+    >
+      <div className="grid gap-5">
+        <div className="relative overflow-hidden rounded-[28px] border border-[var(--line)] bg-[linear-gradient(140deg,rgba(132,184,44,0.2),rgba(255,255,255,0.03)_32%,rgba(255,255,255,0.01)_100%)] p-5 shadow-[0_24px_60px_-45px_rgba(0,0,0,0.9)]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(132,184,44,0.24),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_26%)]" />
+          <div className="relative grid gap-4">
+            <div className="inline-flex w-fit rounded-full border border-[var(--line)] bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
+              GLYPH beta
+            </div>
+            <div className="grid gap-2">
+              <h3 className="text-2xl font-semibold tracking-tight text-[var(--text)]">
+                Спасибо, {viewerName}, что помогаешь развивать проект
+              </h3>
+              <p className="max-w-2xl text-sm leading-7 text-[var(--muted)]">
+                Сейчас ты участвуешь в бета-тесте GLYPH. Если заметишь баг, странное поведение интерфейса или просто захочешь предложить улучшение, напиши мне в Telegram: <span className="font-semibold text-[var(--accent)]">@ISt1chl</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
+            <div className="text-sm font-semibold text-[var(--text)]">Что важно знать</div>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              Проект активно дорабатывается, поэтому отдельные детали интерфейса и поведения ещё могут меняться.
+            </p>
+          </div>
+          <div className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
+            <div className="text-sm font-semibold text-[var(--text)]">Личные сообщения</div>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              Этот раздел пока находится на стадии размышления и проектирования, поэтому может отсутствовать или выглядеть незавершённо.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs leading-6 text-[var(--muted)]">
+            Твоё участие помогает сделать GLYPH стабильнее и понятнее перед следующими обновлениями.
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.localStorage.setItem(`glyph-beta-welcome:${viewerId}`, "seen");
+              setDismissed(true);
+            }}
+            className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90"
+          >
+            Понятно, поехали
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function RealtimeBridge({ viewerId }: { viewerId: string }) {
   const pathname = usePathname();
   const router = useRouter();

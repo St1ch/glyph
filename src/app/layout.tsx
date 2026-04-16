@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Handjet } from "next/font/google";
 import Link from "next/link";
 import Script from "next/script";
-import { CookieNotice, DesktopSiteNotifications, MobileNavBar, NavLink, RealtimeBridge } from "@/components/client";
+import { BetaWelcomeModal, CookieNotice, DesktopSiteNotifications, MobileNavBar, NavLink, RealtimeBridge } from "@/components/client";
 import { AvatarBubble } from "@/components/server";
 import { getUnreadNotificationCount, getViewer } from "@/lib/data";
 import { siteConfig } from "@/lib/site";
@@ -58,6 +58,7 @@ export default async function RootLayout({
         </Script>
         {viewer ? <RealtimeBridge viewerId={viewer.id} /> : null}
         {viewer ? <DesktopSiteNotifications viewerId={viewer.id} enabled={viewer.notificationsEnabled} /> : null}
+        {viewer ? <BetaWelcomeModal viewerId={viewer.id} viewerName={viewer.name} /> : null}
 
         <header className="fixed inset-x-0 top-0 z-40 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
           <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-4 py-3">
