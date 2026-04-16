@@ -2204,30 +2204,34 @@ export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: b
   ] as const;
 
   return (
-    <div className="fixed bottom-5 right-6 z-30 hidden max-w-[300px] items-end gap-2 text-right xl:flex xl:flex-col">
-      <div className="flex flex-wrap justify-end gap-2">
-        {links.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            target={item.href.startsWith("http") ? "_blank" : undefined}
-            rel={item.href.startsWith("http") ? "noreferrer" : undefined}
-            className="text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--text)]"
-          >
-            {item.label}
-          </Link>
+    <div className="fixed bottom-6 right-8 z-30 hidden items-end gap-2 text-right xl:flex xl:flex-col">
+      <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
+        {links.map((item, index) => (
+          <div key={item.label} className="flex items-center gap-2">
+            <Link
+              href={item.href}
+              target={item.href.startsWith("http") ? "_blank" : undefined}
+              rel={item.href.startsWith("http") ? "noreferrer" : undefined}
+              className="font-medium transition hover:text-[var(--text)]"
+            >
+              {item.label}
+            </Link>
+            {index < links.length - 1 ? (
+              <span className="text-[9px] text-[var(--line)]">•</span>
+            ) : null}
+          </div>
         ))}
         {canOpenBetaInfo ? (
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event("glyph:open-beta-welcome"))}
-            className="rounded-full border border-[color:color-mix(in_srgb,var(--accent)_45%,var(--line))] bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] transition hover:opacity-90"
+            className="ml-2 rounded-full border border-[color:color-mix(in_srgb,var(--accent)_55%,var(--line))] bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]"
           >
             Бета-инфо
           </button>
         ) : null}
       </div>
-      <div className="text-[10px] leading-5 text-[var(--muted)]">
+      <div className="text-[10px] leading-5 text-[color:color-mix(in_srgb,var(--muted)_86%,transparent)]">
         © 2026 GLYPH
       </div>
     </div>
