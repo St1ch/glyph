@@ -60,7 +60,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const historyRequests = requests.filter((request) => request.status !== "pending");
 
   return (
-    <div className="flex w-full max-w-[860px] flex-col gap-6 px-4 py-6">
+    <div className="flex w-full max-w-[860px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[1100px]">
       <SectionCard
         title="Админка"
         description={`Модерация доступна для @${viewer.handle}. Здесь собраны жалобы, заявки на верификацию и журнал проверок.`}

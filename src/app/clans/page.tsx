@@ -13,7 +13,7 @@ export default async function ClansPage() {
   }
 
   return (
-    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6">
+    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[980px]">
       <SectionCard
         title="Кланы"
         description="Здесь собраны сообщества, в которых вы уже состоите, и новые кланы, которые можно развивать дальше."

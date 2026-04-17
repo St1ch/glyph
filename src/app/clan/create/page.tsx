@@ -14,7 +14,7 @@ export default async function ClanCreatePage() {
   }
 
   return (
-    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6">
+    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[920px]">
       <SectionCard
         title="Создать клан"
         description="Минимальный старт: название, адрес, описание и эмодзи-аватар. После создания вы сразу попадёте на страницу сообщества."

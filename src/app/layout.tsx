@@ -90,7 +90,7 @@ export default async function RootLayout({
         {viewer ? <BetaWelcomeModal viewerId={viewer.id} viewerName={viewer.name} /> : null}
 
         <header className="fixed inset-x-0 top-0 z-40 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
-          <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-4 py-3">
+          <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-4 py-3 min-[2400px]:max-w-[1360px]">
             <Link href="/" className="flex items-center gap-2">
               <span className="text-xl font-semibold tracking-tight">{siteConfig.name}</span>
               <span className="text-xs text-[var(--muted)]">{siteConfig.version}</span>
@@ -110,8 +110,8 @@ export default async function RootLayout({
           </div>
         </header>
 
-        <div className="mx-auto flex w-full max-w-[1040px] gap-6 lg:px-4">
-          <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[240px] shrink-0 flex-col justify-between py-4 lg:flex">
+        <div className="mx-auto flex w-full max-w-[1040px] gap-6 lg:px-4 min-[2400px]:max-w-[1360px] min-[2400px]:gap-8">
+          <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[240px] shrink-0 flex-col justify-between py-4 lg:flex min-[2400px]:w-[280px]">
             <div className="grid gap-6">
               <Link href="/" className="flex items-center gap-3 px-3 py-2">
                 <span className="text-xl font-semibold tracking-tight">{siteConfig.name}</span>

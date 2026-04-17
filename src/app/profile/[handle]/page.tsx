@@ -53,7 +53,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
 
   if (!data) {
     return (
-      <div className="w-full max-w-[760px] px-4 py-6">
+      <div className="w-full max-w-[760px] px-4 py-6 min-[2400px]:max-w-[980px]">
         <EmptyState
           title="Профиль не найден"
           description="Проверьте username в адресной строке или найдите нужного человека через поиск."
@@ -74,7 +74,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   const currentItems = activeTab === "posts" ? posts : likedPosts;
 
   return (
-    <div className="flex w-full max-w-[760px] flex-col gap-4 px-4 py-6">
+      <div className="flex w-full max-w-[760px] flex-col gap-4 px-4 py-6 min-[2400px]:max-w-[980px]">
       <section className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[var(--panel)] shadow-[0_24px_60px_-45px_rgba(0,0,0,0.9)]">
         <div className="relative h-40 w-full sm:h-48">
           {user.coverImage ? (

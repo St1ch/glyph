@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default function MessagesPage() {
   return (
-    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6">
+    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[980px]">
       <SectionCard
         title="Личные сообщения скоро"
         description="Раздел уже зарезервирован, но сами сообщения пока ещё не вошли в текущий релиз."

@@ -36,7 +36,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const { viewer, users, groups } = await getSearchData(query);
 
   return (
-    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6">
+    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[980px]">
       <SectionCard
         title="Поиск"
         description="Ищите людей по имени и username, а кланы по названию, slug или описанию."

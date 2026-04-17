@@ -67,6 +67,18 @@ html[data-theme="light"] {
   color-scheme: light;
 }
 
+@media (min-width: 2400px) {
+  html {
+    font-size: 19px;
+  }
+}
+
+@media (min-width: 3000px) {
+  html {
+    font-size: 20px;
+  }
+}
+
 body {
   min-height: 100vh;
   margin: 0;

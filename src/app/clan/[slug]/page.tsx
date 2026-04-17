@@ -42,7 +42,7 @@ export default async function ClanPage({ params }: ClanPageProps) {
 
   if (!data) {
     return (
-      <div className="w-full max-w-[760px] px-4 py-6">
+      <div className="w-full max-w-[760px] px-4 py-6 min-[2400px]:max-w-[980px]">
         <EmptyState
           title="Клан не найден"
           description="Проверьте адрес или найдите нужное сообщество через поиск."
@@ -55,7 +55,7 @@ export default async function ClanPage({ params }: ClanPageProps) {
   const canPost = viewer ? group.memberIds.includes(viewer.id) : false;
 
   return (
-    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6">
+      <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[980px]">
       <section className="overflow-hidden rounded-[28px] border border-[var(--line)] bg-[var(--panel)] shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)]">
         <div className="h-44 w-full sm:h-52">
           {group.coverImage ? (

@@ -22,7 +22,7 @@ export default async function NotificationsPage() {
   const { viewer, items } = await getNotificationsData();
 
   return (
-    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6">
+    <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[980px]">
       {viewer ? <NotificationsReadBridge /> : null}
       <SectionCard
         title="Уведомления"

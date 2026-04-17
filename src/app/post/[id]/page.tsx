@@ -48,7 +48,7 @@ export default async function PostDetailPage(props: PageProps<"/post/[id]">) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-[760px] px-4">
+      <div className="w-full max-w-[760px] px-4 min-[2400px]:max-w-[980px]">
         <SectionCard
           title="Обсуждение поста"
           description="Здесь собраны все комментарии и ответы к публикации."
