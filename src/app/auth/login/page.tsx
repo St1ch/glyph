@@ -1,5 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthForm } from "@/components/client";
+
+export const metadata: Metadata = {
+  title: "Вход",
+  description: "Войдите в аккаунт GLYPH по email или username.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+  alternates: {
+    canonical: "/auth/login",
+  },
+};
 
 export default async function LoginPage({
   searchParams,

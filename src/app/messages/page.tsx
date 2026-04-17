@@ -1,5 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SectionCard } from "@/components/server";
+
+export const metadata: Metadata = {
+  title: "Сообщения · скоро",
+  description: "Раздел личных сообщений в GLYPH пока готовится к следующему этапу разработки.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+  alternates: {
+    canonical: "/messages",
+  },
+};
 
 export default function MessagesPage() {
   return (

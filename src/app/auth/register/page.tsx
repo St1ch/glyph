@@ -1,6 +1,18 @@
 ﻿import Link from "next/link";
 import { AuthForm } from "@/components/client";
 
+export const metadata = {
+  title: "Регистрация",
+  description: "Создайте аккаунт GLYPH и получите доступ к ленте, кланам и обсуждениям.",
+  alternates: {
+    canonical: "/auth/register",
+  },
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
 export default function RegisterPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-8 px-4 py-12">

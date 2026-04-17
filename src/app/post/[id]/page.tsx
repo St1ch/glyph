@@ -1,9 +1,42 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PostCard, SectionCard } from "@/components/server";
 import { getPostData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
+
+type PostPageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const data = await getPostData(id);
+
+  if (!data.post) {
+    return {
+      title: "Пост не найден",
+      description: "Запрошенный пост в GLYPH не найден или недоступен.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const post = data.post;
+  const authorName = post.author.name;
+  const excerpt = post.content.trim().slice(0, 140);
+
+  return {
+    title: `Пост ${authorName}`,
+    description: excerpt || `Обсуждение публикации автора ${authorName} в GLYPH.`,
+    alternates: {
+      canonical: `/post/${post.id}`,
+    },
+  };
+}
 
 export default async function PostDetailPage(props: PageProps<"/post/[id]">) {
   const { id } = await props.params;

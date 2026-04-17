@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ClanCard, EmptyState, SectionCard, UserCard } from "@/components/server";
 import { getSearchData } from "@/lib/data";
@@ -7,6 +8,27 @@ export const dynamic = "force-dynamic";
 type SearchPageProps = {
   searchParams: Promise<{ q?: string }>;
 };
+
+export async function generateMetadata({
+  searchParams,
+}: SearchPageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const query = (params.q ?? "").trim();
+
+  return {
+    title: query ? `Поиск: ${query}` : "Поиск",
+    description: query
+      ? `Результаты поиска по запросу «${query}» в GLYPH: пользователи и кланы.`
+      : "Поиск пользователей и кланов в социальной платформе GLYPH.",
+    robots: {
+      index: false,
+      follow: true,
+    },
+    alternates: {
+      canonical: "/search",
+    },
+  };
+}
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const params = await searchParams;

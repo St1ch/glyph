@@ -1,9 +1,9 @@
-﻿export const siteConfig = {
+export const siteConfig = {
   name: "GLYPH",
   version: "v1 beta",
   description:
     "Минималистичная социальная платформа с лентой, кланами, уведомлениями и подтверждаемыми профилями.",
-  url: "https://glyph.local",
+  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
   navigation: [
     { href: "/", label: "Лента", icon: "feed" },
     { href: "/search", label: "Поиск", icon: "search" },

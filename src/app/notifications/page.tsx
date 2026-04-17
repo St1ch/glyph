@@ -1,9 +1,22 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { NotificationsReadBridge } from "@/components/client";
 import { NotificationList, SectionCard } from "@/components/server";
 import { getNotificationsData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Уведомления",
+  description: "Служебная страница уведомлений GLYPH для лайков, подписок и системных событий.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+  alternates: {
+    canonical: "/notifications",
+  },
+};
 
 export default async function NotificationsPage() {
   const { viewer, items } = await getNotificationsData();

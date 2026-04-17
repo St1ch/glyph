@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { PostComposer } from "@/components/client";
 import { AvatarBubble, ClanCard, EmptyState, PostCard, SectionCard } from "@/components/server";
@@ -8,6 +9,32 @@ export const dynamic = "force-dynamic";
 type ClanPageProps = {
   params: Promise<{ slug: string }>;
 };
+
+export async function generateMetadata({ params }: ClanPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const data = await getClanData(slug);
+
+  if (!data) {
+    return {
+      title: "Клан не найден",
+      description: "Запрошенный клан в GLYPH не найден.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const { group } = data;
+
+  return {
+    title: `${group.name} (@${group.slug})`,
+    description: group.description || `Клан ${group.name} в социальной платформе GLYPH.`,
+    alternates: {
+      canonical: `/clan/${group.slug}`,
+    },
+  };
+}
 
 export default async function ClanPage({ params }: ClanPageProps) {
   const { slug } = await params;

@@ -12,6 +12,18 @@ import { formatRelativeDate } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Админка",
+  description: "Служебный раздел модерации GLYPH для работы с жалобами, заявками и проверками.",
+  alternates: {
+    canonical: "/admin",
+  },
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
 function formatReportCategory(category: string) {
   switch (category) {
     case "spam":

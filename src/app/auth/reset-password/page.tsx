@@ -1,5 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PasswordResetForm } from "@/components/client";
+
+export const metadata: Metadata = {
+  title: "Смена пароля",
+  description: "Задайте новый пароль для аккаунта GLYPH по ссылке из письма.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+  alternates: {
+    canonical: "/auth/reset-password",
+  },
+};
 
 export default async function ResetPasswordPage({
   searchParams,

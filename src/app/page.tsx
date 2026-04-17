@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PostComposer } from "@/components/client";
 import { EmptyState, PostCard, SectionCard } from "@/components/server";
@@ -9,6 +10,35 @@ export const dynamic = "force-dynamic";
 type HomeProps = {
   searchParams: Promise<{ view?: string }>;
 };
+
+export async function generateMetadata({
+  searchParams,
+}: HomeProps): Promise<Metadata> {
+  const params = await searchParams;
+  const view = params.view ?? "for-you";
+
+  if (view === "clans") {
+    return {
+      title: "Лента кланов",
+      description: "Публикации кланов и тематических сообществ GLYPH в одной ленте.",
+      alternates: { canonical: "/" },
+    };
+  }
+
+  if (view === "following") {
+    return {
+      title: "Подписки",
+      description: "Лента публикаций пользователей, на которых вы подписаны в GLYPH.",
+      alternates: { canonical: "/" },
+    };
+  }
+
+  return {
+    title: "Лента",
+    description: "Главная лента GLYPH: посты, комментарии, репосты, кланы и уведомления в одной социальной платформе.",
+    alternates: { canonical: "/" },
+  };
+}
 
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;

@@ -1,4 +1,5 @@
-﻿import Link from "next/link";
+import type { Metadata } from "next";
+import Link from "next/link";
 import Image from "next/image";
 import {
   FollowButton,
@@ -17,6 +18,34 @@ type ProfilePageProps = {
   params: Promise<{ handle: string }>;
   searchParams: Promise<{ tab?: string }>;
 };
+
+export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
+  const { handle } = await params;
+  const data = await getProfileData(handle, "posts");
+
+  if (!data) {
+    return {
+      title: "Профиль не найден",
+      description: "Запрошенный профиль в GLYPH не найден.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const { user, contentLocked } = data;
+
+  return {
+    title: `${user.name} (@${user.handle})`,
+    description: contentLocked
+      ? `Приватный профиль пользователя @${user.handle} в GLYPH.`
+      : user.bio || `Профиль пользователя @${user.handle} в социальной платформе GLYPH.`,
+    alternates: {
+      canonical: `/profile/${user.handle}`,
+    },
+  };
+}
 
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
   const [{ handle }, query] = await Promise.all([params, searchParams]);
