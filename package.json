@@ -13,6 +13,7 @@
   "dependencies": {
     "@types/ws": "^8.18.1",
     "bcryptjs": "^3.0.3",
+    "heic-convert": "^2.1.0",
     "mysql2": "^3.22.0",
     "next": "16.2.1",
     "nodemailer": "^7.0.13",

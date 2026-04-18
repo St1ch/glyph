@@ -18,7 +18,7 @@ function getUploadError(kind: string, type: "format" | "size") {
       return "Поддерживаются только видео MP4, WebM или MOV.";
     }
 
-    return "Поддерживаются только изображения JPG, PNG, WEBP и GIF.";
+    return "Поддерживаются изображения JPG, PNG, WEBP, GIF, HEIC и HEIF.";
   }
 
   if (kind === "verification") {

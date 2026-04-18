@@ -60,14 +60,14 @@ function getUploadLimitText(kind: "avatar" | "cover" | "post" | "verification") 
   }
 
   if (kind === "avatar") {
-    return `Максимальный размер изображения для аватара — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP и GIF.`;
+    return `Максимальный размер изображения для аватара — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP, GIF, HEIC и HEIF.`;
   }
 
   if (kind === "cover") {
-    return `Максимальный размер изображения для обложки — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP и GIF.`;
+    return `Максимальный размер изображения для обложки — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP, GIF, HEIC и HEIF.`;
   }
 
-  return `Максимальный размер изображения — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP и GIF.`;
+  return `Максимальный размер изображения — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP, GIF, HEIC и HEIF.`;
 }
 
 async function uploadFile(file: File, kind: "avatar" | "cover" | "post" | "verification") {
@@ -76,7 +76,7 @@ async function uploadFile(file: File, kind: "avatar" | "cover" | "post" | "verif
       throw new Error("Поддерживаются только видео MP4, WebM или MOV.");
     }
   } else if (!imageTypes.includes(file.type as (typeof imageTypes)[number])) {
-    throw new Error("Поддерживаются только изображения JPG, PNG, WEBP и GIF.");
+    throw new Error("Поддерживаются только изображения JPG, PNG, WEBP, GIF, HEIC и HEIF.");
   }
 
   if (file.size > uploadLimits[kind]) {

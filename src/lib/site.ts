@@ -32,6 +32,10 @@ export const imageTypes = [
   "image/png",
   "image/webp",
   "image/gif",
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
 ] as const;
 
 export const formatters = {

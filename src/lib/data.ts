@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
+import heicConvert from "heic-convert";
 import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import type {
   AdminPostReport,
@@ -2236,8 +2237,21 @@ export async function revokeVerification(userId: string, adminUserId: string) {
 }
 
 export async function saveUpload(file: File, folder: string) {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
+  const sourceBuffer = Buffer.from(await file.arrayBuffer());
+  const sourceExt = file.name.split(".").pop()?.toLowerCase() || "bin";
+  const isHeic =
+    ["heic", "heif"].includes(sourceExt) ||
+    ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(file.type);
+  const buffer = isHeic
+    ? Buffer.from(
+        await heicConvert({
+          buffer: sourceBuffer,
+          format: "JPEG",
+          quality: 0.92,
+        }),
+      )
+    : sourceBuffer;
+  const ext = isHeic ? "jpg" : sourceExt;
   const subdir = path.join(uploadsDir, folder);
   const filename = `${Date.now()}-${randomUUID()}.${ext}`;
   const absoluteDirectory = path.join(subdir);
