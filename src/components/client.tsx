@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import type { AdminPostReport, DecoratedPost, DecoratedPostComment, ThemePreference, User, VerificationStatus } from "@/lib/types";
-import { formatRelativeDate, imageTypes, joinClasses, uploadLimits, verificationVideoTypes } from "@/lib/site";
+import { formatRelativeDate, imageTypes, isHeicAssetUrl, joinClasses, uploadLimits, verificationVideoTypes } from "@/lib/site";
 import { EmojiPicker } from "@/components/emoji-picker";
 export { MobileNavBar } from "@/components/mobile-nav-bar";
 
@@ -577,6 +577,7 @@ export function PostImageViewer({
   maxPreviewHeightClass?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const useNativeImage = isHeicAssetUrl(src);
 
   return (
     <>
@@ -586,24 +587,40 @@ export function PostImageViewer({
         onClick={() => setIsOpen(true)}
         className={joinClasses("block w-full overflow-hidden rounded-[22px]", className)}
       >
-        <Image
-          alt={alt}
-          src={src}
-          width={width}
-          height={height}
-          className={joinClasses("w-full border border-[var(--line)] object-cover", maxPreviewHeightClass ?? "max-h-[480px]")}
-        />
+        {useNativeImage ? (
+          <img
+            alt={alt}
+            src={src}
+            className={joinClasses("w-full border border-[var(--line)] object-cover", maxPreviewHeightClass ?? "max-h-[480px]")}
+          />
+        ) : (
+          <Image
+            alt={alt}
+            src={src}
+            width={width}
+            height={height}
+            className={joinClasses("w-full border border-[var(--line)] object-cover", maxPreviewHeightClass ?? "max-h-[480px]")}
+          />
+        )}
       </button>
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Просмотр изображения">
         <div className="grid gap-4" data-no-post-open="true">
-          <Image
-            alt={alt}
-            src={src}
-            width={1600}
-            height={1200}
-            className="max-h-[75vh] w-full rounded-[22px] object-contain"
-          />
+          {useNativeImage ? (
+            <img
+              alt={alt}
+              src={src}
+              className="max-h-[75vh] w-full rounded-[22px] object-contain"
+            />
+          ) : (
+            <Image
+              alt={alt}
+              src={src}
+              width={1600}
+              height={1200}
+              className="max-h-[75vh] w-full rounded-[22px] object-contain"
+            />
+          )}
           <div className="flex justify-end">
             <button
               type="button"

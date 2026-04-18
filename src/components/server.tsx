@@ -1,7 +1,7 @@
 ﻿import Image from "next/image";
 import Link from "next/link";
 import type { DecoratedPost, Group, Notification, User } from "@/lib/types";
-import { formatRelativeDate, formatters, joinClasses } from "@/lib/site";
+import { formatRelativeDate, formatters, isHeicAssetUrl, joinClasses } from "@/lib/site";
 import { CommentsPanel, FollowButton, JoinClanButton, LikeButton, PostActionsMenu, PostImageViewer, PostOpenFrame, RepostButton, VoteButtons } from "@/components/client";
 
 type Viewer = User | null;
@@ -94,6 +94,19 @@ export function AvatarBubble({
   }[size];
 
   if (avatar.type === "image") {
+    if (isHeicAssetUrl(avatar.value)) {
+      return (
+        <img
+          alt={name}
+          src={avatar.value}
+          className={joinClasses(
+            sizeClass,
+            "rounded-3xl border border-[var(--line)] object-cover shadow-sm",
+          )}
+        />
+      );
+    }
+
     return (
       <Image
         alt={name}

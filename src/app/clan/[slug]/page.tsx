@@ -3,6 +3,7 @@ import Image from "next/image";
 import { PostComposer } from "@/components/client";
 import { AvatarBubble, ClanCard, EmptyState, PostCard, SectionCard } from "@/components/server";
 import { getClanData } from "@/lib/data";
+import { isHeicAssetUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -59,13 +60,21 @@ export default async function ClanPage({ params }: ClanPageProps) {
       <section className="overflow-hidden rounded-[28px] border border-[var(--line)] bg-[var(--panel)] shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)]">
         <div className="h-44 w-full sm:h-52">
           {group.coverImage ? (
-            <Image
-              src={group.coverImage}
-              alt={group.name}
-              width={1600}
-              height={420}
-              className="h-full w-full object-cover"
-            />
+            isHeicAssetUrl(group.coverImage) ? (
+              <img
+                src={group.coverImage}
+                alt={group.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <Image
+                src={group.coverImage}
+                alt={group.name}
+                width={1600}
+                height={420}
+                className="h-full w-full object-cover"
+              />
+            )
           ) : (
             <div className="h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(132,184,44,0.24),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)),linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.34))]" />
           )}

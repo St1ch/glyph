@@ -94,6 +94,10 @@ export function normalizeAssetUrl(value: string | null) {
   return /\.(heic|heif)(\?|$)/i.test(value) ? `${value}${value.includes("?") ? "&" : "?"}format=jpg` : value;
 }
 
+export function isHeicAssetUrl(value: string | null | undefined) {
+  return Boolean(value && /(\.heic|\.heif)(\?|$)|[?&]format=jpg(?:&|$)/i.test(value));
+}
+
 export function isAdminHandle(handle: string) {
   return adminHandles.includes(handle as (typeof adminHandles)[number]);
 }

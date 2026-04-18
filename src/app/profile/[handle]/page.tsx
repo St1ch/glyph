@@ -10,7 +10,7 @@ import {
 } from "@/components/client";
 import { AvatarBubble, EmptyState, PostCard, VerificationBadge } from "@/components/server";
 import { getProfileData } from "@/lib/data";
-import { formatters, joinClasses } from "@/lib/site";
+import { formatters, isHeicAssetUrl, joinClasses } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +78,11 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
       <section className="overflow-hidden rounded-[24px] border border-[var(--line)] bg-[var(--panel)] shadow-[0_24px_60px_-45px_rgba(0,0,0,0.9)]">
         <div className="relative h-40 w-full sm:h-48">
           {user.coverImage ? (
-            <Image src={user.coverImage} alt={user.name} width={1600} height={400} className="h-full w-full object-cover" />
+            isHeicAssetUrl(user.coverImage) ? (
+              <img src={user.coverImage} alt={user.name} className="h-full w-full object-cover" />
+            ) : (
+              <Image src={user.coverImage} alt={user.name} width={1600} height={400} className="h-full w-full object-cover" />
+            )
           ) : (
             <div className="h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(132,184,44,0.24),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)),linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.34))]" />
           )}
