@@ -86,6 +86,14 @@ export function getBaseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
+export function normalizeAssetUrl(value: string | null) {
+  if (!value) {
+    return value;
+  }
+
+  return /\.(heic|heif)(\?|$)/i.test(value) ? `${value}${value.includes("?") ? "&" : "?"}format=jpg` : value;
+}
+
 export function isAdminHandle(handle: string) {
   return adminHandles.includes(handle as (typeof adminHandles)[number]);
 }

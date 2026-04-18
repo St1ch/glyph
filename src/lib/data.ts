@@ -20,7 +20,7 @@ import type {
   User,
   VerificationRequest,
 } from "@/lib/types";
-import { formatRelativeDate, getBaseUrl, isAdminHandle, slugify } from "@/lib/site";
+import { formatRelativeDate, getBaseUrl, isAdminHandle, normalizeAssetUrl, slugify } from "@/lib/site";
 import {
   execute,
   placeholders,
@@ -278,7 +278,7 @@ function mapUser(row: UserRow, relations?: {
       type: row.avatar_type,
       value: row.avatar_value,
     },
-    coverImage: row.cover_image,
+    coverImage: normalizeAssetUrl(row.cover_image),
     createdAt: toIso(row.created_at)!,
     verifiedEmailAt: toIso(row.verified_email_at),
       followerIds: relations?.followerIds ?? [],
@@ -302,7 +302,7 @@ function mapGroup(row: GroupRow, memberIds: string[] = []): Group {
       type: row.avatar_type,
       value: row.avatar_value,
     },
-    coverImage: row.cover_image,
+    coverImage: normalizeAssetUrl(row.cover_image),
     memberIds,
     createdAt: toIso(row.created_at)!,
   };
@@ -620,7 +620,7 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
           postId: comment.post_id,
           authorId: comment.user_id,
           content: comment.content,
-          imagePath: comment.image_path,
+          imagePath: normalizeAssetUrl(comment.image_path),
           parentCommentId: comment.parent_comment_id,
           createdAt: toIso(comment.created_at)!,
           author,
@@ -678,7 +678,7 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
       authorType: post.author_type,
       authorId: post.author_id,
       content: post.content,
-      imagePath: post.image_path,
+      imagePath: normalizeAssetUrl(post.image_path),
       poll: poll
         ? {
             question: poll.question,
