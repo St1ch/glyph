@@ -2,6 +2,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import heicConvert from "heic-convert";
 import { readUpload } from "@/lib/data";
+import { detectImageFormat } from "@/lib/image-signature";
 
 export const runtime = "nodejs";
 
@@ -40,10 +41,10 @@ export async function GET(_: Request, context: AssetRouteContext) {
   try {
     const { path: pathParts } = await context.params;
     const relativePath = pathParts.join("/");
-    const extension = path.extname(relativePath).toLowerCase();
     const sourceBuffer = await readUpload(relativePath);
+    const detectedFormat = detectImageFormat(sourceBuffer);
     const buffer =
-      extension === ".heic" || extension === ".heif"
+      detectedFormat === "heic"
         ? Buffer.from(
             await heicConvert({
               buffer: sourceBuffer,
@@ -52,10 +53,11 @@ export async function GET(_: Request, context: AssetRouteContext) {
             }),
           )
         : sourceBuffer;
+    const contentType = detectedFormat === "heic" ? "image/jpeg" : getContentType(detectedFormat ? `file.${detectedFormat}` : relativePath);
 
     return new NextResponse(buffer, {
       headers: {
-        "Content-Type": getContentType(relativePath),
+        "Content-Type": contentType,
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });

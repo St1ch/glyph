@@ -34,6 +34,7 @@ import {
 } from "@/lib/mysql";
 import { isMailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/mail";
 import { emitRealtimeEvent, queueRealtimeEvent } from "@/lib/realtime";
+import { detectImageFormat } from "@/lib/image-signature";
 
 const storageDir = path.join(process.cwd(), "storage");
 const uploadsDir = path.join(storageDir, "uploads");
@@ -2239,7 +2240,9 @@ export async function revokeVerification(userId: string, adminUserId: string) {
 export async function saveUpload(file: File, folder: string) {
   const sourceBuffer = Buffer.from(await file.arrayBuffer());
   const sourceExt = file.name.split(".").pop()?.toLowerCase() || "bin";
+  const detectedFormat = detectImageFormat(sourceBuffer);
   const isHeic =
+    detectedFormat === "heic" ||
     ["heic", "heif"].includes(sourceExt) ||
     ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"].includes(file.type);
   const buffer = isHeic
@@ -2251,7 +2254,7 @@ export async function saveUpload(file: File, folder: string) {
         }),
       )
     : sourceBuffer;
-  const ext = isHeic ? "jpg" : sourceExt;
+  const ext = isHeic ? "jpg" : detectedFormat === "jpeg" ? "jpg" : detectedFormat || sourceExt;
   const subdir = path.join(uploadsDir, folder);
   const filename = `${Date.now()}-${randomUUID()}.${ext}`;
   const absoluteDirectory = path.join(subdir);
