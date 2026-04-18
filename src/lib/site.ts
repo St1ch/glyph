@@ -91,7 +91,7 @@ export function normalizeAssetUrl(value: string | null) {
     return value;
   }
 
-  if (!value.startsWith("/api/assets/")) {
+  if (!value.includes("/api/assets/")) {
     return value;
   }
 
@@ -103,7 +103,7 @@ export function normalizeAssetUrl(value: string | null) {
 }
 
 export function isHeicAssetUrl(value: string | null | undefined) {
-  return Boolean(value && /(\.heic|\.heif)(\?|$)|[?&]format=jpg(?:&|$)/i.test(value));
+  return Boolean(value && (/(\.heic|\.heif)(\?|$)|[?&]format=jpg(?:&|$)/i.test(value) || value.includes("/api/assets/")));
 }
 
 export function isAdminHandle(handle: string) {

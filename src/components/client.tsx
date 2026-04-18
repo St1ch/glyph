@@ -577,7 +577,7 @@ export function PostImageViewer({
   maxPreviewHeightClass?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const useNativeImage = isHeicAssetUrl(src) || src.startsWith("/api/assets/");
+  const useNativeImage = isHeicAssetUrl(src);
 
   return (
     <>
