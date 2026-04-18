@@ -91,15 +91,7 @@ export function normalizeAssetUrl(value: string | null) {
     return value;
   }
 
-  if (!value.startsWith("/api/assets/")) {
-    return value;
-  }
-
-  const next = /\.(heic|heif)(\?|$)/i.test(value)
-    ? `${value}${value.includes("?") ? "&" : "?"}format=jpg`
-    : value;
-
-  return /([?&])v=2(?:&|$)/.test(next) ? next : `${next}${next.includes("?") ? "&" : "?"}v=2`;
+  return /\.(heic|heif)(\?|$)/i.test(value) ? `${value}${value.includes("?") ? "&" : "?"}format=jpg` : value;
 }
 
 export function isHeicAssetUrl(value: string | null | undefined) {
