@@ -549,6 +549,10 @@ export function PostOpenFrame({
           return;
         }
 
+        if (shouldIgnore(event.target)) {
+          return;
+        }
+
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           openPost();
