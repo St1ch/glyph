@@ -720,12 +720,10 @@ async function insertNotification(
   notification: Notification,
   options?: { force?: boolean },
 ) {
-  if (!options?.force) {
-    const recipient = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [notification.userId]);
+  const recipient = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [notification.userId]);
 
-    if (!recipient || !recipient.notifications_enabled) {
-      return;
-    }
+  if (!recipient) {
+    return;
   }
 
   await txExecute(
@@ -743,13 +741,15 @@ async function insertNotification(
     ],
   );
 
-  queueRealtimeEvent(connection, {
-    type: "notification:new",
-    recipients: [notification.userId],
-    payload: {
-      item: notification,
-    },
-  });
+  if (options?.force || recipient.notifications_enabled) {
+    queueRealtimeEvent(connection, {
+      type: "notification:new",
+      recipients: [notification.userId],
+      payload: {
+        item: notification,
+      },
+    });
+  }
 }
 
 async function getSessionToken() {
