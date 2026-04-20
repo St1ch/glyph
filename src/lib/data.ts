@@ -41,6 +41,7 @@ const uploadsDir = path.join(storageDir, "uploads");
 
 const sessionCookieName = "glyph_session";
 const sessionTtlDays = 30;
+const pwaSessionTtlDays = 3650;
 
 type RegisterInput = {
   name: string;
@@ -1294,14 +1295,16 @@ export async function loginUser(input: LoginInput) {
   return mapUser(user, { ...(await getFollowRelations(user.id)), likedPostIds: await getLikedPostIds(user.id) });
 }
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, options?: { pwa?: boolean }) {
+  const ttlDays = options?.pwa ? pwaSessionTtlDays : sessionTtlDays;
+
   return withTransaction(async (connection) => {
     const token = randomBytes(30).toString("hex");
-    await txExecute(connection, `DELETE FROM sessions WHERE user_id = ? OR expires_at <= NOW(3)`, [userId]);
+    await txExecute(connection, `DELETE FROM sessions WHERE expires_at <= NOW(3)`);
     await txExecute(connection, `INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)`, [
       token,
       userId,
-      new Date(Date.now() + sessionTtlDays * 24 * 60 * 60 * 1000),
+      new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
     ]);
     return token;
   });
@@ -1319,13 +1322,15 @@ export function getSessionCookieName() {
   return sessionCookieName;
 }
 
-export function getSessionCookieOptions() {
+export function getSessionCookieOptions(options?: { pwa?: boolean }) {
+  const ttlDays = options?.pwa ? pwaSessionTtlDays : sessionTtlDays;
+
   return {
     httpOnly: true,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * sessionTtlDays,
+    maxAge: 60 * 60 * 24 * ttlDays,
     priority: "high" as const,
   };
 }

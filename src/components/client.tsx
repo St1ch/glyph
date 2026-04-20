@@ -1288,6 +1288,9 @@ export function AuthForm({
               ? {
                   login: formData.get("login"),
                   password: formData.get("password"),
+                  pwa:
+                    window.matchMedia("(display-mode: standalone)").matches ||
+                    ((navigator as Navigator & { standalone?: boolean }).standalone === true),
               }
             : {
                 name: formData.get("name"),
