@@ -809,19 +809,13 @@ const quickCommentEmojis = ["🔥", "😂", "😭", "👏", "❤️", "✨", "�
 type CommentComposerProps = {
   postId: string;
   disabled?: boolean;
-  parentCommentId?: string | null;
-  replyLabel?: string;
   compact?: boolean;
-  onCancel?: () => void;
 };
 
 export function CommentComposer({
   postId,
   disabled,
-  parentCommentId = null,
-  replyLabel,
   compact = false,
-  onCancel,
 }: CommentComposerProps) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -846,12 +840,10 @@ export function CommentComposer({
             postId,
             content,
             imagePath,
-            parentCommentId,
           });
           form.reset();
           setContent("");
           setImageFile(null);
-          onCancel?.();
           window.dispatchEvent(new Event("feed:changed"));
           router.refresh();
         } catch (value) {
@@ -861,12 +853,6 @@ export function CommentComposer({
         }
       }}
     >
-      {replyLabel ? (
-        <div className="text-xs text-[var(--muted)]">
-          Ответ для <span className="font-medium text-[var(--text)]">{replyLabel}</span>
-        </div>
-      ) : null}
-
       <div className="grid gap-2">
         <label className="min-w-0">
           <span className="sr-only">Комментарий</span>
@@ -924,21 +910,12 @@ export function CommentComposer({
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            {onCancel ? (
-              <button
-                type="button"
-                onClick={onCancel}
-                className="rounded-full border border-[var(--line)] px-4 py-3 text-sm font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
-              >
-                Отмена
-              </button>
-            ) : null}
             <button
               type="submit"
               disabled={disabled || pending}
               className="rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {pending ? "..." : parentCommentId ? "Ответить" : "Комментировать"}
+              {pending ? "..." : "Комментировать"}
             </button>
           </div>
         </div>
@@ -975,27 +952,11 @@ function CommentAvatar({ user }: { user: DecoratedPostComment["author"] }) {
 
 function CommentNode({
   comment,
-  childrenMap,
-  disabled,
-  replyingToId,
-  setReplyingToId,
-  postId,
-  commentLookup,
 }: {
   comment: DecoratedPostComment;
-  childrenMap: Map<string, DecoratedPostComment[]>;
-  disabled?: boolean;
-  replyingToId: string | null;
-  setReplyingToId: (value: string | null) => void;
-  postId: string;
-  commentLookup: Map<string, DecoratedPostComment>;
 }) {
-  const replies = childrenMap.get(comment.id) ?? [];
-  const parent = comment.parentCommentId ? commentLookup.get(comment.parentCommentId) : null;
-  const isReplying = replyingToId === comment.id;
-
   return (
-    <div className={joinClasses("grid gap-3", comment.parentCommentId ? "ml-6 border-l border-[var(--line)] pl-4" : "")}>
+    <div className="grid gap-3">
       <div className="rounded-[20px] border border-[var(--line)] bg-[var(--panel-soft)] p-3">
         <div className="flex items-start gap-3">
           <Link href={`/profile/${comment.author.handle}`} className="shrink-0">
@@ -1012,11 +973,6 @@ function CommentNode({
               ) : null}
               <span className="text-xs text-[var(--muted)]">{formatRelativeDate(comment.createdAt)}</span>
             </div>
-            {parent ? (
-              <div className="mt-2 text-xs text-[var(--muted)]">
-                Ответ для <span className="font-medium text-[var(--text)]">@{parent.author.handle}</span>
-              </div>
-            ) : null}
             {comment.content ? (
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--text)]">{comment.content}</p>
             ) : null}
@@ -1030,49 +986,9 @@ function CommentNode({
                 maxPreviewHeightClass="max-h-[280px]"
               />
             ) : null}
-            <div className="mt-3">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => setReplyingToId(isReplying ? null : comment.id)}
-                className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)] disabled:opacity-50"
-              >
-                {isReplying ? "Закрыть ответ" : "Ответить"}
-              </button>
-            </div>
           </div>
         </div>
       </div>
-
-      {isReplying ? (
-        <div className="ml-6">
-          <CommentComposer
-            postId={postId}
-            disabled={disabled}
-            compact
-            parentCommentId={comment.id}
-            replyLabel={`@${comment.author.handle}`}
-            onCancel={() => setReplyingToId(null)}
-          />
-        </div>
-      ) : null}
-
-      {replies.length ? (
-        <div className="grid gap-3">
-          {replies.map((reply) => (
-            <CommentNode
-              key={reply.id}
-              comment={reply}
-              childrenMap={childrenMap}
-              disabled={disabled}
-              replyingToId={replyingToId}
-              setReplyingToId={setReplyingToId}
-              postId={postId}
-              commentLookup={commentLookup}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1086,40 +1002,12 @@ export function CommentsPanel({
   comments: DecoratedPostComment[];
   disabled?: boolean;
 }) {
-  const [replyingToId, setReplyingToId] = useState<string | null>(null);
-
-  const childrenMap = useMemo(() => {
-    const map = new Map<string, DecoratedPostComment[]>();
-
-    for (const comment of comments) {
-      if (!comment.parentCommentId) {
-        continue;
-      }
-
-      map.set(comment.parentCommentId, [...(map.get(comment.parentCommentId) ?? []), comment]);
-    }
-
-    return map;
-  }, [comments]);
-
-  const commentLookup = useMemo(() => new Map(comments.map((comment) => [comment.id, comment])), [comments]);
-  const rootComments = useMemo(() => comments.filter((comment) => !comment.parentCommentId), [comments]);
-
   return (
     <div className="grid gap-3">
-      {rootComments.length ? (
+      {comments.length ? (
         <div className="grid gap-3">
-          {rootComments.map((comment) => (
-            <CommentNode
-              key={comment.id}
-              comment={comment}
-              childrenMap={childrenMap}
-              disabled={disabled}
-              replyingToId={replyingToId}
-              setReplyingToId={setReplyingToId}
-              postId={postId}
-              commentLookup={commentLookup}
-            />
+          {comments.map((comment) => (
+            <CommentNode key={comment.id} comment={comment} />
           ))}
         </div>
       ) : (
@@ -1266,6 +1154,7 @@ export function AuthForm({
   const [error, setError] = useState(initialError);
   const [success, setSuccess] = useState("");
   const [previewLink, setPreviewLink] = useState("");
+  const [selectedEmoji, setSelectedEmoji] = useState("✨");
 
   const title = mode === "login" ? "Вход в GLYPH" : "Регистрация в GLYPH";
 
@@ -1297,6 +1186,7 @@ export function AuthForm({
                 handle: formData.get("handle"),
                 email: formData.get("email"),
                 password: formData.get("password"),
+                avatarEmoji: selectedEmoji,
               };
 
         try {
@@ -1339,6 +1229,13 @@ export function AuthForm({
           <label className="grid gap-2 text-sm">
             <span className="text-[var(--muted)]">Email</span>
             <input name="email" type="email" required placeholder="you@example.com" className={fieldClass} />
+          </label>
+          <label className="grid gap-2 text-sm">
+            <span className="text-[var(--muted)]">Эмодзи-аватар</span>
+            <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
+            <span className="text-xs text-orange-400/80">
+              Эмодзи выбирается только при регистрации. Подумайте, какой знак будет вашим образом в GLYPH.
+            </span>
           </label>
         </>
       ) : (
@@ -1850,11 +1747,9 @@ export function DesktopSiteNotifications({
 
 export function PostComposer({
   compact = false,
-  groups = [],
   initialGroupSlug = "",
 }: {
   compact?: boolean;
-  groups?: Array<{ id: string; slug: string; name: string }>;
   initialGroupSlug?: string;
 }) {
   const router = useRouter();
@@ -1901,22 +1796,6 @@ export function PostComposer({
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ffb74d] text-lg text-black">🙂</div>
           <div className="flex-1">
-            {groups.length ? (
-              <div className="mb-3">
-                <select
-                  value={targetGroupSlug}
-                  onChange={(event) => setTargetGroupSlug(event.target.value)}
-                  className="w-full rounded-[16px] border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-xs text-[var(--muted)] outline-none"
-                >
-                  <option value="">Публиковать от своего профиля</option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.slug}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
             <textarea
               name="content"
               required
@@ -1964,7 +1843,6 @@ export function ProfileEditor({ user }: { user: User }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [selectedEmoji, setSelectedEmoji] = useState(user.avatar.type === "emoji" ? user.avatar.value : "✨");
 
   return (
     <form
@@ -1983,7 +1861,6 @@ export function ProfileEditor({ user }: { user: User }) {
           await requestJson("/api/profile", {
             name: formData.get("name"),
             bio: formData.get("bio"),
-            avatarEmoji: selectedEmoji,
             coverImagePath,
             themePreference: user.themePreference,
           });
@@ -1997,16 +1874,10 @@ export function ProfileEditor({ user }: { user: User }) {
         }
       }}
     >
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
-        <label className="grid gap-2 text-sm">
-          <span className="text-[var(--muted)]">Имя</span>
-          <input name="name" defaultValue={user.name} required placeholder="Ваше имя" className={fieldClass} />
-        </label>
-        <label className="grid gap-2 text-sm">
-          <span className="text-[var(--muted)]">Эмодзи-аватар</span>
-          <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
-        </label>
-      </div>
+      <label className="grid gap-2 text-sm">
+        <span className="text-[var(--muted)]">Имя</span>
+        <input name="name" defaultValue={user.name} required placeholder="Ваше имя" className={fieldClass} />
+      </label>
 
       <label className="grid gap-2 text-sm">
         <span className="text-[var(--muted)]">Описание</span>

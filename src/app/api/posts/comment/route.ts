@@ -6,7 +6,6 @@ const schema = z.object({
   postId: z.string().min(1),
   content: z.string().trim().max(1000).default(""),
   imagePath: z.string().default(""),
-  parentCommentId: z.string().nullable().optional().transform((value) => value ?? ""),
 }).superRefine((value, ctx) => {
   if (!value.content.trim() && !value.imagePath.trim()) {
     ctx.addIssue({
@@ -31,7 +30,6 @@ export async function POST(request: Request) {
       viewer.id,
       payload.content,
       payload.imagePath.trim() || null,
-      payload.parentCommentId.trim() || null,
     );
 
     return NextResponse.json({ ok: true });

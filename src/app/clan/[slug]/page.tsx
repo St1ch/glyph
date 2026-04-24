@@ -52,7 +52,7 @@ export default async function ClanPage({ params }: ClanPageProps) {
     );
   }
 
-  const { viewer, group, members, posts, viewerGroups } = data;
+  const { viewer, group, members, posts } = data;
   const canPost = viewer ? group.memberIds.includes(viewer.id) : false;
 
   return (
@@ -92,7 +92,7 @@ export default async function ClanPage({ params }: ClanPageProps) {
         </div>
       </section>
 
-      {canPost ? <PostComposer compact groups={viewerGroups} initialGroupSlug={group.slug} /> : null}
+      {canPost ? <PostComposer compact initialGroupSlug={group.slug} /> : null}
 
       <SectionCard title="Посты клана" description="Сюда попадают публикации сообщества и всё, что удерживает общую тему.">
         <div className="grid gap-4">

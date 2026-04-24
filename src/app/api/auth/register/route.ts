@@ -7,6 +7,7 @@ const schema = z.object({
   handle: z.string().trim().min(2),
   email: z.email().trim(),
   password: z.string().min(8),
+  avatarEmoji: z.string().trim().min(1).max(16),
 });
 
 export async function POST(request: Request) {

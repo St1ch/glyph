@@ -48,6 +48,7 @@ type RegisterInput = {
   handle: string;
   email: string;
   password: string;
+  avatarEmoji: string;
 };
 
 type LoginInput = {
@@ -58,7 +59,6 @@ type LoginInput = {
 type ProfileUpdateInput = {
   name: string;
   bio: string;
-  avatarEmoji: string;
   coverImagePath: string;
   themePreference: User["themePreference"];
 };
@@ -1164,7 +1164,7 @@ export async function registerUser(input: RegisterInput) {
       email,
       passwordHash: hashSync(input.password, 10),
       bio: "Новый профиль в GLYPH.",
-      avatar: { type: "emoji" as const, value: "✨" },
+      avatar: { type: "emoji" as const, value: input.avatarEmoji.trim() || "✨" },
       coverImage: null,
       createdAt: now.toISOString(),
       verifiedEmailAt: null,
@@ -1650,7 +1650,6 @@ export async function createComment(
   userId: string,
   content: string,
   imagePath: string | null = null,
-  parentCommentId: string | null = null,
 ) {
   return withTransaction(async (connection) => {
     const normalizedContent = content.trim();
@@ -1671,27 +1670,13 @@ export async function createComment(
       throw new Error("Добавьте текст или изображение к комментарию.");
     }
 
-    let parentComment: CommentRow | null = null;
-
-    if (parentCommentId) {
-      parentComment = await txQueryOne<CommentRow>(
-        connection,
-        `SELECT id, post_id, user_id, content, image_path, parent_comment_id, created_at FROM comments WHERE id = ?`,
-        [parentCommentId],
-      );
-
-      if (!parentComment || parentComment.post_id !== post.id) {
-        throw new Error("Комментарий, на который вы отвечаете, не найден.");
-      }
-    }
-
     const commentId = randomUUID();
     const now = new Date();
 
     await txExecute(
       connection,
       `INSERT INTO comments (id, post_id, user_id, content, image_path, parent_comment_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [commentId, post.id, author.id, normalizedContent, imagePath, parentCommentId, now],
+      [commentId, post.id, author.id, normalizedContent, imagePath, null, now],
     );
 
     if (post.author_type === "user" && post.author_id !== author.id) {
@@ -1701,18 +1686,6 @@ export async function createComment(
           post.author_id,
           "Новый комментарий",
           `${author.name} прокомментировал(а) ваш пост.`,
-          `/post/${post.id}`,
-        ),
-      );
-    }
-
-    if (parentComment && parentComment.user_id !== author.id && parentComment.user_id !== post.author_id) {
-      await insertNotification(
-        connection,
-        buildNotification(
-          parentComment.user_id,
-          "Ответ на комментарий",
-          `${author.name} ответил(а) на ваш комментарий.`,
           `/post/${post.id}`,
         ),
       );
@@ -1814,13 +1787,11 @@ export async function votePost(postId: string, optionId: string, userId: string)
 export async function updateProfile(userId: string, input: ProfileUpdateInput) {
   await execute(
     `UPDATE users
-     SET name = ?, bio = ?, avatar_type = ?, avatar_value = ?, cover_image = ?, theme_preference = ?
+     SET name = ?, bio = ?, cover_image = ?, theme_preference = ?
      WHERE id = ?`,
     [
       input.name.trim(),
       input.bio.trim(),
-      "emoji",
-      input.avatarEmoji.trim(),
       input.coverImagePath || null,
       input.themePreference,
       userId,

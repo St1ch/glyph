@@ -43,7 +43,7 @@ export async function generateMetadata({
 export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
   const view = params.view ?? "for-you";
-  const { viewer, feed, viewerGroups } = await getAppData();
+  const { viewer, feed } = await getAppData();
 
   const filteredFeed = feed.filter((post) => {
     if (view === "clans") {
@@ -89,7 +89,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
         <div className="mb-6">
           {viewer ? (
-            <PostComposer groups={viewerGroups} />
+            <PostComposer />
           ) : (
             <SectionCard
               title="Чтобы постить и собирать свой круг"
