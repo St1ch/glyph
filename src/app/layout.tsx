@@ -163,7 +163,7 @@ export default async function RootLayout({
           </main>
         </div>
 
-        <SidebarFooter canOpenBetaInfo={Boolean(viewer)} />
+        <SidebarFooter />
         <CookieNotice />
         <MobileNavBar
           items={siteConfig.navigation}

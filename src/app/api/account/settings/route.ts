@@ -5,7 +5,6 @@ import { getViewer, updateAccountSettings } from "@/lib/data";
 const schema = z.object({
   themePreference: z.enum(["light", "dark", "system"]),
   notificationsEnabled: z.boolean(),
-  privateProfile: z.boolean(),
 });
 
 export async function POST(request: Request) {

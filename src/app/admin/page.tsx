@@ -62,26 +62,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   return (
     <div className="flex w-full max-w-[860px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[1100px]">
       <SectionCard
-        title="Админка"
-        description={`Модерация доступна для @${viewer.handle}. Здесь собраны жалобы, заявки на верификацию и журнал проверок.`}
-      >
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href={`/profile/${viewer.handle}`}
-            className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
-          >
-            Вернуться в профиль
-          </Link>
-          <Link
-            href="/notifications"
-            className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
-          >
-            Открыть уведомления
-          </Link>
-        </div>
-      </SectionCard>
-
-      <SectionCard
         title="Жалобы на посты"
         description="Все жалобы из меню постов попадают сюда. Можно принять жалобу или отклонить её."
       >

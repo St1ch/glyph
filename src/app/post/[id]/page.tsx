@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   };
 }
 
-export default async function PostDetailPage(props: PageProps<"/post/[id]">) {
+export default async function PostDetailPage(props: PostPageProps) {
   const { id } = await props.params;
   const { viewer, post } = await getPostData(id);
 
@@ -51,7 +51,7 @@ export default async function PostDetailPage(props: PageProps<"/post/[id]">) {
       <div className="w-full max-w-[760px] px-4 min-[2400px]:max-w-[980px]">
         <SectionCard
           title="Обсуждение поста"
-          description="Здесь собраны все комментарии и ответы к публикации."
+          description="Здесь собраны комментарии к публикации."
         >
           <div className="mb-4">
             <Link

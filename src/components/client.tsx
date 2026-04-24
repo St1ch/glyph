@@ -2090,7 +2090,7 @@ function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; onClose:
   );
 }
 
-export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: boolean }) {
+export function SidebarFooter() {
   const links = [
     { href: "/", label: "Главная" },
     { href: "/search", label: "Поиск" },
@@ -2118,15 +2118,6 @@ export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: b
         ))}
       </div>
       <div className="flex items-center justify-end gap-3 text-[10px] leading-5">
-        {canOpenBetaInfo ? (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event("glyph:open-beta-welcome"))}
-            className="rounded-full border border-[color:color-mix(in_srgb,var(--accent)_55%,var(--line))] bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]"
-          >
-            Бета-инфо
-          </button>
-        ) : null}
         <div className="text-[color:color-mix(in_srgb,var(--muted)_86%,transparent)]">
           © 2026 GLYPH
         </div>
@@ -2179,7 +2170,6 @@ export function SettingsModal({ user }: { user: User }) {
   const router = useRouter();
   const [theme, setTheme] = useState<ThemePreference>(user.themePreference);
   const [notifications, setNotifications] = useState(user.notificationsEnabled);
-  const [privateProfile, setPrivateProfile] = useState(user.privateProfile);
   const [pending, setPending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [passwordPending, setPasswordPending] = useState(false);
@@ -2194,13 +2184,11 @@ export function SettingsModal({ user }: { user: User }) {
   useEffect(() => {
     setTheme(user.themePreference);
     setNotifications(user.notificationsEnabled);
-    setPrivateProfile(user.privateProfile);
-  }, [user.themePreference, user.notificationsEnabled, user.privateProfile]);
+  }, [user.themePreference, user.notificationsEnabled]);
 
   const saveSettings = async (next: {
     themePreference: ThemePreference;
     notificationsEnabled: boolean;
-    privateProfile: boolean;
   }) => {
     setPending(true);
     setError("");
@@ -2210,7 +2198,6 @@ export function SettingsModal({ user }: { user: User }) {
       await requestJson("/api/account/settings", next);
       setTheme(next.themePreference);
       setNotifications(next.notificationsEnabled);
-      setPrivateProfile(next.privateProfile);
       applyTheme(next.themePreference);
       setSuccess("Настройки сохранены.");
       router.refresh();
@@ -2239,7 +2226,6 @@ export function SettingsModal({ user }: { user: User }) {
                     onClick={() => saveSettings({
                       themePreference: item,
                       notificationsEnabled: notifications,
-                      privateProfile,
                     })}
                     className={joinClasses(toggleBase, theme === item ? "bg-white/[0.08] text-[var(--text)]" : "text-[var(--muted)]")}
                   >
@@ -2260,24 +2246,6 @@ export function SettingsModal({ user }: { user: User }) {
                   saveSettings({
                     themePreference: theme,
                     notificationsEnabled: !notifications,
-                    privateProfile,
-                  })
-                }
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[var(--panel-soft)] p-4">
-              <div>
-                <div className="text-sm font-medium text-[var(--text)]">Приватный профиль</div>
-                <div className="text-xs text-[var(--muted)]">Только ваши подписчики смогут видеть посты и лайки профиля</div>
-              </div>
-              <Switch
-                checked={privateProfile}
-                onChange={() =>
-                  saveSettings({
-                    themePreference: theme,
-                    notificationsEnabled: notifications,
-                    privateProfile: !privateProfile,
                   })
                 }
               />

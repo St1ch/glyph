@@ -66,7 +66,6 @@ type ProfileUpdateInput = {
 type AccountSettingsInput = {
   themePreference: User["themePreference"];
   notificationsEnabled: boolean;
-  privateProfile: boolean;
 };
 
 type CreatePostInput = {
@@ -1818,12 +1817,11 @@ export async function updateProfile(userId: string, input: ProfileUpdateInput) {
 export async function updateAccountSettings(userId: string, input: AccountSettingsInput) {
   await execute(
     `UPDATE users
-     SET theme_preference = ?, notifications_enabled = ?, private_profile = ?
+     SET theme_preference = ?, notifications_enabled = ?
      WHERE id = ?`,
     [
       input.themePreference,
       input.notificationsEnabled ? 1 : 0,
-      input.privateProfile ? 1 : 0,
       userId,
     ],
   );

@@ -11,7 +11,6 @@ export default function robots(): MetadataRoute.Robots {
           "/api/",
           "/admin",
           "/auth/",
-          "/messages",
           "/notifications",
           "/verify-email",
         ],
