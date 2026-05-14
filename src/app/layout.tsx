@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Handjet } from "next/font/google";
 import Link from "next/link";
-import Script from "next/script";
 import {
   BetaWelcomeModal,
   CookieNotice,
@@ -12,7 +11,7 @@ import {
   SidebarFooter,
 } from "@/components/client";
 import { AvatarBubble } from "@/components/server";
-import { getUnreadNotificationCount, getViewer } from "@/lib/data";
+import { getUnreadMessageCount, getUnreadNotificationCount, getViewer } from "@/lib/data";
 import { siteConfig } from "@/lib/site";
 import "./globals.css";
 
@@ -73,7 +72,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const viewer = await getViewer();
-  const unreadNotificationCount = viewer ? await getUnreadNotificationCount(viewer.id) : 0;
+  const [unreadNotificationCount, unreadMessageCount] = viewer
+    ? await Promise.all([getUnreadNotificationCount(viewer.id), getUnreadMessageCount(viewer.id)])
+    : [0, 0];
 
   return (
     <html
@@ -82,14 +83,12 @@ export default async function RootLayout({
       className={`${handjet.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-[var(--page)] font-[var(--font-handjet)] text-[var(--text)]">
-        <Script id="glyph-theme-script" strategy="beforeInteractive">
-          {themeScript}
-        </Script>
+        <script id="glyph-theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} suppressHydrationWarning />
         {viewer ? <RealtimeBridge viewerId={viewer.id} /> : null}
         {viewer ? <DesktopSiteNotifications viewerId={viewer.id} enabled={viewer.notificationsEnabled} /> : null}
         {viewer ? <BetaWelcomeModal viewerId={viewer.id} viewerName={viewer.name} /> : null}
 
-        <header className="fixed inset-x-0 top-0 z-40 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
+        <header className="app-mobile-header fixed inset-x-0 top-0 z-40 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
           <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-4 py-3 min-[2400px]:max-w-[1360px]">
             <Link href="/" className="flex items-center gap-2">
               <span className="text-xl font-semibold tracking-tight">{siteConfig.name}</span>
@@ -110,8 +109,8 @@ export default async function RootLayout({
           </div>
         </header>
 
-        <div className="mx-auto flex w-full max-w-[1040px] gap-6 lg:px-4 min-[2400px]:max-w-[1360px] min-[2400px]:gap-8">
-          <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[240px] shrink-0 flex-col justify-between py-4 lg:flex min-[2400px]:w-[280px]">
+        <div className="app-shell mx-auto flex w-full max-w-[1040px] gap-6 lg:px-4 min-[2400px]:max-w-[1360px] min-[2400px]:gap-8">
+          <aside className="app-sidebar sticky top-4 hidden h-[calc(100vh-2rem)] w-[240px] shrink-0 flex-col justify-between py-4 lg:flex min-[2400px]:w-[280px]">
             <div className="grid gap-6">
               <Link href="/" className="flex items-center gap-3 px-3 py-2">
                 <span className="text-xl font-semibold tracking-tight">{siteConfig.name}</span>
@@ -127,6 +126,7 @@ export default async function RootLayout({
                     icon={item.icon}
                     viewerId={viewer?.id}
                     initialNotificationCount={item.href === "/notifications" ? unreadNotificationCount : 0}
+                    initialMessageCount={item.href === "/messages" ? unreadMessageCount : 0}
                   />
                 ))}
                 {viewer ? (
@@ -158,8 +158,8 @@ export default async function RootLayout({
             )}
           </aside>
 
-          <main className="flex min-h-screen min-w-0 flex-1 flex-col">
-            <div className="w-full pb-24 pt-16 lg:pb-8 lg:pt-4">{children}</div>
+          <main className="app-main flex min-h-screen min-w-0 flex-1 flex-col">
+            <div className="app-content w-full pb-24 pt-16 lg:pb-8 lg:pt-4">{children}</div>
           </main>
         </div>
 
@@ -171,6 +171,7 @@ export default async function RootLayout({
           isAdmin={viewer?.isAdmin}
           viewerId={viewer?.id}
           initialNotificationCount={unreadNotificationCount}
+          initialMessageCount={unreadMessageCount}
         />
       </body>
     </html>

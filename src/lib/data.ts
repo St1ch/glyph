@@ -10,10 +10,13 @@ import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import type {
   AdminPostReport,
   AdminVerificationRequest,
+  DirectMessage,
   DecoratedPostComment,
   DecoratedPost,
   Group,
   MailPreview,
+  MessageConversation,
+  MessageUserSummary,
   Notification,
   PostReport,
   PostReportCategory,
@@ -33,7 +36,7 @@ import {
   withTransaction,
 } from "@/lib/mysql";
 import { isMailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/mail";
-import { emitRealtimeEvent, queueRealtimeEvent } from "@/lib/realtime";
+import { emitRealtimeEvent, isUserViewingConversation, queueRealtimeEvent } from "@/lib/realtime";
 import { detectImageFormat } from "@/lib/image-signature";
 
 const storageDir = path.join(process.cwd(), "storage");
@@ -48,6 +51,7 @@ type RegisterInput = {
   handle: string;
   email: string;
   password: string;
+  avatarEmoji: string;
 };
 
 type LoginInput = {
@@ -58,7 +62,6 @@ type LoginInput = {
 type ProfileUpdateInput = {
   name: string;
   bio: string;
-  avatarEmoji: string;
   coverImagePath: string;
   themePreference: User["themePreference"];
 };
@@ -95,6 +98,16 @@ type CreateClanInput = {
   coverImagePath: string;
 };
 
+type UpdateClanInput = {
+  userId: string;
+  currentSlug: string;
+  name: string;
+  slug: string;
+  description: string;
+  avatarEmoji: string;
+  coverImagePath: string;
+};
+
 type UserRow = RowDataPacket & {
   id: string;
   handle: string;
@@ -106,6 +119,7 @@ type UserRow = RowDataPacket & {
   avatar_value: string;
   cover_image: string | null;
   created_at: Date | string;
+  last_seen_at: Date | string | null;
   verified_email_at: Date | string | null;
   theme_preference: User["themePreference"];
   notifications_enabled: number;
@@ -116,6 +130,7 @@ type UserRow = RowDataPacket & {
 type GroupRow = RowDataPacket & {
   id: string;
   slug: string;
+  owner_user_id: string | null;
   name: string;
   description: string;
   avatar_type: "emoji" | "image";
@@ -179,6 +194,34 @@ type NotificationRow = RowDataPacket & {
   link: string;
   created_at: Date | string;
   is_read: number;
+};
+
+type ConversationRow = RowDataPacket & {
+  id: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type ConversationMemberRow = RowDataPacket & {
+  conversation_id: string;
+  user_id: string;
+  last_read_at: Date | string | null;
+  created_at: Date | string;
+};
+
+type DirectMessageRow = RowDataPacket & {
+  id: string;
+  conversation_id: string;
+  sender_user_id: string;
+  content: string;
+  image_path: string | null;
+  media_paths: string | null;
+  reply_to_message_id: string | null;
+  forwarded_from_message_id: string | null;
+  created_at: Date | string;
+  edited_at: Date | string | null;
+  deleted_at: Date | string | null;
+  deleted_for_all: 0 | 1;
 };
 
 type SessionRow = RowDataPacket & {
@@ -264,6 +307,14 @@ function toIso(value: Date | string | null) {
   return new Date(value).toISOString();
 }
 
+function isOnlineFromLastSeen(value: Date | string | null) {
+  if (!value) {
+    return false;
+  }
+
+  return Date.now() - new Date(value).getTime() < 2 * 60 * 1000;
+}
+
 function mapUser(row: UserRow, relations?: {
   followerIds?: string[];
   followingIds?: string[];
@@ -282,6 +333,8 @@ function mapUser(row: UserRow, relations?: {
     },
     coverImage: normalizeAssetUrl(row.cover_image),
     createdAt: toIso(row.created_at)!,
+    lastSeenAt: toIso(row.last_seen_at),
+    isOnline: isOnlineFromLastSeen(row.last_seen_at),
     verifiedEmailAt: toIso(row.verified_email_at),
       followerIds: relations?.followerIds ?? [],
       followingIds: relations?.followingIds ?? [],
@@ -298,6 +351,7 @@ function mapGroup(row: GroupRow, memberIds: string[] = []): Group {
   return {
     id: row.id,
     slug: row.slug,
+    ownerId: row.owner_user_id,
     name: row.name,
     description: row.description,
     avatar: {
@@ -319,6 +373,86 @@ function mapNotification(row: NotificationRow): Notification {
     link: row.link,
     createdAt: toIso(row.created_at)!,
     read: Boolean(row.is_read),
+  };
+}
+
+function mapMessageUser(row: UserRow): MessageUserSummary {
+  return {
+    id: row.id,
+    handle: row.handle,
+    name: row.name,
+    avatar: {
+      type: row.avatar_type,
+      value: row.avatar_value,
+    },
+    verificationStatus: row.verification_status,
+    lastSeenAt: toIso(row.last_seen_at),
+    isOnline: isOnlineFromLastSeen(row.last_seen_at),
+  };
+}
+
+function parseMessageMediaPaths(value: string | null | undefined, fallback: string | null | undefined) {
+  const paths: string[] = [];
+
+  if (value) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (typeof item === "string") {
+            const normalized = normalizeAssetUrl(item);
+
+            if (normalized && !paths.includes(normalized)) {
+              paths.push(normalized);
+            }
+          }
+        }
+      }
+    } catch {
+      const normalized = normalizeAssetUrl(value ?? null);
+
+      if (normalized) {
+        paths.push(normalized);
+      }
+    }
+  }
+
+  const normalizedFallback = normalizeAssetUrl(fallback ?? null);
+
+  if (normalizedFallback && !paths.includes(normalizedFallback)) {
+    paths.unshift(normalizedFallback);
+  }
+
+  return paths;
+}
+
+function mapDirectMessage(
+  row: DirectMessageRow,
+  sender: MessageUserSummary,
+  readByRecipient = false,
+  replyTo: DirectMessage["replyTo"] = null,
+  forwardedFrom: DirectMessage["forwardedFrom"] = null,
+): DirectMessage {
+  const mediaPaths = parseMessageMediaPaths(row.media_paths, row.image_path);
+
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderId: row.sender_user_id,
+    content: row.content,
+    imagePath: mediaPaths[0] ?? null,
+    mediaPaths,
+    replyToMessageId: row.reply_to_message_id,
+    replyTo,
+    forwardedFromMessageId: row.forwarded_from_message_id,
+    forwardedFrom,
+    createdAt: toIso(row.created_at)!,
+    editedAt: toIso(row.edited_at),
+    deletedAt: toIso(row.deleted_at),
+    deletedForAll: Boolean(row.deleted_for_all),
+    sender,
+    readByRecipient,
   };
 }
 
@@ -775,6 +909,8 @@ export async function getViewer() {
     return null;
   }
 
+  await execute(`UPDATE users SET last_seen_at = ? WHERE id = ?`, [new Date(), session.user_id]);
+
   const viewer = await getFullUserById(session.user_id);
 
   if (!viewer) {
@@ -944,6 +1080,587 @@ export async function getUnreadNotificationCount(userId: string) {
   );
 
   return Number(row?.count ?? 0);
+}
+
+export async function getUnreadMessageCount(userId: string) {
+  const row = await queryOne<CountRow>(
+    `SELECT COUNT(*) AS count
+     FROM direct_messages dm
+     INNER JOIN conversation_members cm ON cm.conversation_id = dm.conversation_id AND cm.user_id = ?
+     WHERE dm.sender_user_id <> ?
+       AND (cm.last_read_at IS NULL OR dm.created_at > cm.last_read_at)`,
+    [userId, userId],
+  );
+
+  return Number(row?.count ?? 0);
+}
+
+async function getConversationMessages(conversationId: string, viewerId: string) {
+  const rows = await queryRows<DirectMessageRow>(
+    `SELECT dm.*
+     FROM direct_messages dm
+     WHERE dm.conversation_id = ?
+       AND NOT EXISTS (
+         SELECT 1
+         FROM direct_message_deletions dmd
+         WHERE dmd.message_id = dm.id AND dmd.user_id = ?
+       )
+     ORDER BY dm.created_at ASC`,
+    [conversationId, viewerId],
+  );
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const senderIds = [...new Set(rows.map((row) => row.sender_user_id))];
+  const referenceIds = [
+    ...new Set(
+      rows.flatMap((row) => [row.reply_to_message_id, row.forwarded_from_message_id].filter(Boolean) as string[]),
+    ),
+  ];
+  const referenceRows = referenceIds.length
+    ? await queryRows<DirectMessageRow>(`SELECT * FROM direct_messages WHERE id IN (${placeholders(referenceIds)})`, referenceIds)
+    : [];
+  const referenceSenderIds = referenceRows.map((row) => row.sender_user_id);
+  const [senders, recipientMember] = await Promise.all([
+    queryRows<UserRow>(
+      `SELECT * FROM users WHERE id IN (${placeholders([...new Set([...senderIds, ...referenceSenderIds])])})`,
+      [...new Set([...senderIds, ...referenceSenderIds])],
+    ),
+    queryOne<ConversationMemberRow>(
+      `SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id <> ? LIMIT 1`,
+      [conversationId, viewerId],
+    ),
+  ]);
+  const senderMap = new Map(senders.map((row) => [row.id, mapMessageUser(row)]));
+  const referenceMap = new Map(referenceRows.map((row) => [row.id, row]));
+  const recipientLastReadAt = recipientMember?.last_read_at ? new Date(recipientMember.last_read_at).getTime() : 0;
+
+  return rows
+    .map((row) => {
+      const sender = senderMap.get(row.sender_user_id);
+      const readByRecipient = row.sender_user_id === viewerId && recipientLastReadAt >= new Date(row.created_at).getTime();
+      const replyRow = row.reply_to_message_id ? referenceMap.get(row.reply_to_message_id) : null;
+      const replySender = replyRow ? senderMap.get(replyRow.sender_user_id) : null;
+      const forwardedRow = row.forwarded_from_message_id ? referenceMap.get(row.forwarded_from_message_id) : null;
+      const forwardedSender = forwardedRow ? senderMap.get(forwardedRow.sender_user_id) : null;
+      const replyTo =
+        replyRow && replySender
+          ? {
+              id: replyRow.id,
+              senderName: replySender.name,
+              content: replyRow.content,
+              imagePath: normalizeAssetUrl(replyRow.image_path),
+              deleted: Boolean(replyRow.deleted_for_all),
+            }
+          : null;
+      const forwardedFrom = forwardedSender ? { senderName: forwardedSender.name } : null;
+
+      return sender ? mapDirectMessage(row, sender, readByRecipient, replyTo, forwardedFrom) : null;
+    })
+    .filter(Boolean) as DirectMessage[];
+}
+
+async function getConversationSummary(conversation: ConversationRow, viewerId: string): Promise<MessageConversation | null> {
+  const [participantRow, lastMessageRow, unreadRow] = await Promise.all([
+    queryOne<UserRow>(
+      `SELECT u.*
+       FROM conversation_members cm
+       INNER JOIN users u ON u.id = cm.user_id
+       WHERE cm.conversation_id = ? AND cm.user_id <> ?
+       LIMIT 1`,
+      [conversation.id, viewerId],
+    ),
+    queryOne<DirectMessageRow>(
+      `SELECT * FROM direct_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [conversation.id],
+    ),
+    queryOne<CountRow>(
+      `SELECT COUNT(*) AS count
+       FROM direct_messages dm
+       INNER JOIN conversation_members cm ON cm.conversation_id = dm.conversation_id AND cm.user_id = ?
+       WHERE dm.conversation_id = ?
+         AND dm.sender_user_id <> ?
+         AND (cm.last_read_at IS NULL OR dm.created_at > cm.last_read_at)`,
+      [viewerId, conversation.id, viewerId],
+    ),
+  ]);
+
+  if (!participantRow) {
+    return null;
+  }
+
+  const senderRow = lastMessageRow
+    ? await queryOne<UserRow>(`SELECT * FROM users WHERE id = ?`, [lastMessageRow.sender_user_id])
+    : null;
+
+  return {
+    id: conversation.id,
+    participant: mapMessageUser(participantRow),
+    lastMessage: lastMessageRow && senderRow ? mapDirectMessage(lastMessageRow, mapMessageUser(senderRow)) : null,
+    unreadCount: Number(unreadRow?.count ?? 0),
+    updatedAt: toIso(conversation.updated_at)!,
+  };
+}
+
+export async function getMessagesData(conversationId = "", search = "") {
+  const viewer = await getViewer();
+
+  if (!viewer) {
+    return {
+      viewer: null,
+      conversations: [] as MessageConversation[],
+      messages: [] as DirectMessage[],
+      activeConversation: null as MessageConversation | null,
+      candidates: [] as MessageUserSummary[],
+      search,
+    };
+  }
+
+  const conversationRows = await queryRows<ConversationRow>(
+    `SELECT c.*
+     FROM conversations c
+     INNER JOIN conversation_members cm ON cm.conversation_id = c.id
+     WHERE cm.user_id = ?
+     ORDER BY c.updated_at DESC`,
+    [viewer.id],
+  );
+
+  const conversations = (await Promise.all(
+    conversationRows.map((row) => getConversationSummary(row, viewer.id)),
+  )).filter(Boolean) as MessageConversation[];
+
+  const activeConversation = conversationId
+    ? conversations.find((conversation) => conversation.id === conversationId) ?? null
+    : null;
+
+  let messages: DirectMessage[] = [];
+
+  if (activeConversation) {
+    await execute(
+      `UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?`,
+      [new Date(), activeConversation.id, viewer.id],
+    );
+    messages = await getConversationMessages(activeConversation.id, viewer.id);
+  }
+
+  const normalizedSearch = search.trim();
+  const candidates = normalizedSearch
+    ? (
+        await queryRows<UserRow>(
+          `SELECT *
+           FROM users
+           WHERE id <> ?
+             AND (name LIKE ? OR handle LIKE ?)
+           ORDER BY created_at DESC
+           LIMIT 8`,
+          [viewer.id, `%${normalizedSearch}%`, `%${normalizedSearch}%`],
+        )
+      ).map(mapMessageUser)
+    : [];
+
+  return {
+    viewer,
+    conversations: activeConversation
+      ? conversations.map((conversation) =>
+          conversation.id === activeConversation.id ? { ...conversation, unreadCount: 0 } : conversation,
+        )
+      : conversations,
+    messages,
+    activeConversation,
+    candidates,
+    search,
+  };
+}
+
+export async function startDirectConversation(viewerId: string, targetHandle: string) {
+  return withTransaction(async (connection) => {
+    const [viewer, target] = await Promise.all([
+      txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [viewerId]),
+      txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE LOWER(handle) = LOWER(?)`, [targetHandle.trim()]),
+    ]);
+
+    if (!viewer || !target) {
+      throw new Error("Пользователь не найден.");
+    }
+
+    if (!viewer.verified_email_at) {
+      throw new Error("Сначала подтвердите почту.");
+    }
+
+    if (viewer.id === target.id) {
+      throw new Error("Нельзя создать диалог с самим собой.");
+    }
+
+    const existing = await txQueryOne<RowDataPacket & { conversation_id: string }>(
+      connection,
+      `SELECT cm1.conversation_id
+       FROM conversation_members cm1
+       INNER JOIN conversation_members cm2 ON cm2.conversation_id = cm1.conversation_id
+       WHERE cm1.user_id = ? AND cm2.user_id = ?
+       LIMIT 1`,
+      [viewer.id, target.id],
+    );
+
+    if (existing) {
+      return { conversationId: existing.conversation_id };
+    }
+
+    const now = new Date();
+    const id = randomUUID();
+
+    await txExecute(connection, `INSERT INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)`, [id, now, now]);
+    await txExecute(
+      connection,
+      `INSERT INTO conversation_members (conversation_id, user_id, last_read_at, created_at) VALUES (?, ?, ?, ?), (?, ?, NULL, ?)`,
+      [id, viewer.id, now, now, id, target.id, now],
+    );
+
+    return { conversationId: id };
+  });
+}
+
+export async function sendDirectMessage(
+  conversationId: string,
+  senderId: string,
+  content: string,
+  mediaPath = "",
+  mediaPaths: string[] = [],
+  replyToMessageId = "",
+) {
+  return withTransaction(async (connection) => {
+    const normalizedContent = content.trim();
+    const normalizedMediaPaths = [...new Set([mediaPath, ...mediaPaths].map((path) => path.trim()).filter(Boolean))];
+    const normalizedMediaPath = normalizedMediaPaths[0] ?? "";
+    const normalizedReplyId = replyToMessageId.trim();
+
+    if (!normalizedContent && !normalizedMediaPaths.length) {
+      throw new Error("Напишите сообщение или прикрепите файл.");
+    }
+
+    if (normalizedContent.length > 2000) {
+      throw new Error("Сообщение слишком длинное.");
+    }
+
+    if (normalizedMediaPaths.some((path) => !path.startsWith("/api/assets/message/"))) {
+      throw new Error("Некорректное вложение.");
+    }
+
+    if (normalizedReplyId) {
+      const replyMessage = await txQueryOne<DirectMessageRow>(
+        connection,
+        `SELECT * FROM direct_messages WHERE id = ? AND conversation_id = ? AND deleted_for_all = 0`,
+        [normalizedReplyId, conversationId],
+      );
+
+      if (!replyMessage) {
+        throw new Error("Сообщение для ответа не найдено.");
+      }
+    }
+
+    const [sender, membership, recipientMember] = await Promise.all([
+      txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [senderId]),
+      txQueryOne<ConversationMemberRow>(
+        connection,
+        `SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?`,
+        [conversationId, senderId],
+      ),
+      txQueryOne<ConversationMemberRow>(
+        connection,
+        `SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id <> ? LIMIT 1`,
+        [conversationId, senderId],
+      ),
+    ]);
+
+    if (!sender || !membership || !recipientMember) {
+      throw new Error("Диалог не найден.");
+    }
+
+    if (!sender.verified_email_at) {
+      throw new Error("Сначала подтвердите почту.");
+    }
+
+    const recipient = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [recipientMember.user_id]);
+
+    if (!recipient) {
+      throw new Error("Получатель не найден.");
+    }
+
+    const now = new Date();
+    const messageId = randomUUID();
+
+    await txExecute(
+      connection,
+      `INSERT INTO direct_messages (id, conversation_id, sender_user_id, content, image_path, media_paths, reply_to_message_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        messageId,
+        conversationId,
+        sender.id,
+        normalizedContent,
+        normalizedMediaPath || null,
+        normalizedMediaPaths.length ? JSON.stringify(normalizedMediaPaths) : null,
+        normalizedReplyId || null,
+        now,
+      ],
+    );
+    await txExecute(connection, `UPDATE conversations SET updated_at = ? WHERE id = ?`, [now, conversationId]);
+    await txExecute(
+      connection,
+      `UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?`,
+      [now, conversationId, sender.id],
+    );
+
+    const recipientIsViewingConversation = await isUserViewingConversation(recipient.id, conversationId);
+
+    if (!recipientIsViewingConversation) {
+      await insertNotification(
+        connection,
+        buildNotification(
+          recipient.id,
+          "Новое сообщение",
+          normalizedContent ? `${sender.name} отправил(а) вам сообщение.` : `${sender.name} отправил(а) вложение.`,
+          `/messages?conversation=${conversationId}`,
+        ),
+      );
+    }
+
+    queueRealtimeEvent(connection, {
+      type: "message:new",
+      recipients: [sender.id, recipient.id],
+      payload: {
+        conversationId,
+        messageId,
+        senderId: sender.id,
+      },
+    });
+
+    return { id: messageId };
+  });
+}
+
+export async function editDirectMessage(messageId: string, userId: string, content: string) {
+  return withTransaction(async (connection) => {
+    const normalizedContent = content.trim();
+
+    if (!normalizedContent) {
+      throw new Error("Сообщение не может быть пустым.");
+    }
+
+    if (normalizedContent.length > 2000) {
+      throw new Error("Сообщение слишком длинное.");
+    }
+
+    const message = await txQueryOne<DirectMessageRow>(
+      connection,
+      `SELECT * FROM direct_messages WHERE id = ? AND sender_user_id = ? AND deleted_for_all = 0`,
+      [messageId, userId],
+    );
+
+    if (!message) {
+      throw new Error("Сообщение не найдено или его нельзя изменить.");
+    }
+
+    if (message.image_path || message.media_paths) {
+      throw new Error("Сообщения с вложениями пока нельзя изменять.");
+    }
+
+    const now = new Date();
+
+    await txExecute(connection, `UPDATE direct_messages SET content = ?, edited_at = ? WHERE id = ?`, [
+      normalizedContent,
+      now,
+      messageId,
+    ]);
+
+    const memberRows = await txQueryRows<ConversationMemberRow>(
+      connection,
+      `SELECT * FROM conversation_members WHERE conversation_id = ?`,
+      [message.conversation_id],
+    );
+
+    queueRealtimeEvent(connection, {
+      type: "message:changed",
+      recipients: memberRows.map((row) => row.user_id),
+      payload: {
+        conversationId: message.conversation_id,
+        messageId,
+      },
+    });
+
+    return { ok: true };
+  });
+}
+
+export async function deleteDirectMessageForMe(messageId: string, userId: string) {
+  return withTransaction(async (connection) => {
+    const membership = await txQueryOne<ConversationMemberRow>(
+      connection,
+      `SELECT cm.*
+       FROM conversation_members cm
+       INNER JOIN direct_messages dm ON dm.conversation_id = cm.conversation_id
+       WHERE dm.id = ? AND cm.user_id = ?`,
+      [messageId, userId],
+    );
+
+    if (!membership) {
+      throw new Error("Сообщение не найдено.");
+    }
+
+    await txExecute(
+      connection,
+      `INSERT INTO direct_message_deletions (message_id, user_id, deleted_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = VALUES(deleted_at)`,
+      [messageId, userId, new Date()],
+    );
+
+    queueRealtimeEvent(connection, {
+      type: "message:changed",
+      recipients: [userId],
+      payload: {
+        conversationId: membership.conversation_id,
+        messageId,
+      },
+    });
+
+    return { ok: true };
+  });
+}
+
+export async function deleteDirectMessageForAll(messageId: string, userId: string) {
+  return withTransaction(async (connection) => {
+    const message = await txQueryOne<DirectMessageRow>(
+      connection,
+      `SELECT * FROM direct_messages WHERE id = ? AND sender_user_id = ? AND deleted_for_all = 0`,
+      [messageId, userId],
+    );
+
+    if (!message) {
+      throw new Error("Сообщение не найдено или его нельзя удалить у всех.");
+    }
+
+    await txExecute(
+      connection,
+      `UPDATE direct_messages
+       SET content = '', image_path = NULL, media_paths = NULL, deleted_at = ?, deleted_for_all = 1
+       WHERE id = ?`,
+      [new Date(), messageId],
+    );
+
+    const memberRows = await txQueryRows<ConversationMemberRow>(
+      connection,
+      `SELECT * FROM conversation_members WHERE conversation_id = ?`,
+      [message.conversation_id],
+    );
+
+    queueRealtimeEvent(connection, {
+      type: "message:changed",
+      recipients: memberRows.map((row) => row.user_id),
+      payload: {
+        conversationId: message.conversation_id,
+        messageId,
+      },
+    });
+
+    return { ok: true };
+  });
+}
+
+export async function forwardDirectMessage(messageId: string, targetConversationId: string, senderId: string) {
+  return withTransaction(async (connection) => {
+    const [sourceMessage, sender, targetMembership, recipientMember] = await Promise.all([
+      txQueryOne<DirectMessageRow>(
+        connection,
+        `SELECT dm.*
+         FROM direct_messages dm
+         INNER JOIN conversation_members cm ON cm.conversation_id = dm.conversation_id AND cm.user_id = ?
+         WHERE dm.id = ? AND dm.deleted_for_all = 0
+           AND NOT EXISTS (
+             SELECT 1 FROM direct_message_deletions dmd WHERE dmd.message_id = dm.id AND dmd.user_id = ?
+           )`,
+        [senderId, messageId, senderId],
+      ),
+      txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [senderId]),
+      txQueryOne<ConversationMemberRow>(
+        connection,
+        `SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?`,
+        [targetConversationId, senderId],
+      ),
+      txQueryOne<ConversationMemberRow>(
+        connection,
+        `SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id <> ? LIMIT 1`,
+        [targetConversationId, senderId],
+      ),
+    ]);
+
+    if (!sourceMessage || !sender || !targetMembership || !recipientMember) {
+      throw new Error("Не удалось переслать сообщение.");
+    }
+
+    if (!sender.verified_email_at) {
+      throw new Error("Сначала подтвердите почту.");
+    }
+
+    const recipient = await txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [recipientMember.user_id]);
+
+    if (!recipient) {
+      throw new Error("Получатель не найден.");
+    }
+
+    const now = new Date();
+    const forwardedMessageId = randomUUID();
+
+    await txExecute(
+      connection,
+      `INSERT INTO direct_messages
+       (id, conversation_id, sender_user_id, content, image_path, media_paths, forwarded_from_message_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        forwardedMessageId,
+        targetConversationId,
+        senderId,
+        sourceMessage.content,
+        sourceMessage.image_path,
+        sourceMessage.media_paths,
+        sourceMessage.id,
+        now,
+      ],
+    );
+    await txExecute(connection, `UPDATE conversations SET updated_at = ? WHERE id = ?`, [now, targetConversationId]);
+    await txExecute(
+      connection,
+      `UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?`,
+      [now, targetConversationId, senderId],
+    );
+
+    const recipientIsViewingConversation = await isUserViewingConversation(recipient.id, targetConversationId);
+
+    if (!recipientIsViewingConversation) {
+      await insertNotification(
+        connection,
+        buildNotification(
+          recipient.id,
+          "Новое сообщение",
+          `${sender.name} переслал(а) вам сообщение.`,
+          `/messages?conversation=${targetConversationId}`,
+        ),
+      );
+    }
+
+    queueRealtimeEvent(connection, {
+      type: "message:new",
+      recipients: [senderId, recipient.id],
+      payload: {
+        conversationId: targetConversationId,
+        messageId: forwardedMessageId,
+        senderId,
+      },
+    });
+
+    return { id: forwardedMessageId };
+  });
 }
 
 export async function getLiveNotifications(limit = 12) {
@@ -1164,7 +1881,7 @@ export async function registerUser(input: RegisterInput) {
       email,
       passwordHash: hashSync(input.password, 10),
       bio: "Новый профиль в GLYPH.",
-      avatar: { type: "emoji" as const, value: "✨" },
+      avatar: { type: "emoji" as const, value: input.avatarEmoji.trim() || "✨" },
       coverImage: null,
       createdAt: now.toISOString(),
       verifiedEmailAt: null,
@@ -1814,13 +2531,11 @@ export async function votePost(postId: string, optionId: string, userId: string)
 export async function updateProfile(userId: string, input: ProfileUpdateInput) {
   await execute(
     `UPDATE users
-     SET name = ?, bio = ?, avatar_type = ?, avatar_value = ?, cover_image = ?, theme_preference = ?
+     SET name = ?, bio = ?, cover_image = ?, theme_preference = ?
      WHERE id = ?`,
     [
       input.name.trim(),
       input.bio.trim(),
-      "emoji",
-      input.avatarEmoji.trim(),
       input.coverImagePath || null,
       input.themePreference,
       userId,
@@ -2023,6 +2738,10 @@ export async function toggleClanMembership(slug: string, userId: string) {
     const isMember = Boolean(existing);
 
     if (isMember) {
+      if (group.owner_user_id === user.id) {
+        throw new Error("Владелец не может выйти из своего клана.");
+      }
+
       await txExecute(connection, `DELETE FROM group_members WHERE group_id = ? AND user_id = ?`, [group.id, userId]);
     } else {
       await txExecute(connection, `INSERT INTO group_members (group_id, user_id, created_at) VALUES (?, ?, ?)`, [group.id, userId, new Date()]);
@@ -2073,11 +2792,12 @@ export async function createClan(input: CreateClanInput) {
 
     await txExecute(
       connection,
-      `INSERT INTO groups_clans (id, slug, name, description, avatar_type, avatar_value, cover_image, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO groups_clans (id, slug, owner_user_id, name, description, avatar_type, avatar_value, cover_image, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         groupId,
         normalizedSlug,
+        user.id,
         normalizedName,
         normalizedDescription,
         "emoji",
@@ -2095,6 +2815,79 @@ export async function createClan(input: CreateClanInput) {
 
     return {
       id: groupId,
+      slug: normalizedSlug,
+    };
+  });
+}
+
+export async function updateClan(input: UpdateClanInput) {
+  const normalizedName = input.name.trim();
+  const normalizedDescription = input.description.trim();
+  const normalizedSlug = slugify(input.slug || input.name);
+  const normalizedEmoji = input.avatarEmoji.trim() || "✨";
+  const normalizedCoverImage = input.coverImagePath.trim();
+
+  if (normalizedName.length < 3) {
+    throw new Error("Название клана должно быть длиннее.");
+  }
+
+  if (normalizedDescription.length < 12) {
+    throw new Error("Добавьте более подробное описание клана.");
+  }
+
+  if (!normalizedSlug || normalizedSlug.length < 3) {
+    throw new Error("Придумайте понятный slug для адреса клана.");
+  }
+
+  return withTransaction(async (connection) => {
+    const [user, group] = await Promise.all([
+      txQueryOne<UserRow>(connection, `SELECT * FROM users WHERE id = ?`, [input.userId]),
+      txQueryOne<GroupRow>(connection, `SELECT * FROM groups_clans WHERE slug = ?`, [input.currentSlug]),
+    ]);
+
+    if (!user || !group) {
+      throw new Error("Клан или пользователь не найден.");
+    }
+
+    if (group.owner_user_id !== user.id && !isAdminHandle(user.handle)) {
+      throw new Error("Редактировать клан может только владелец.");
+    }
+
+    const existing = await txQueryOne<GroupRow>(
+      connection,
+      `SELECT * FROM groups_clans WHERE slug = ? AND id <> ?`,
+      [normalizedSlug, group.id],
+    );
+
+    if (existing) {
+      throw new Error("Такой адрес клана уже занят.");
+    }
+
+    await txExecute(
+      connection,
+      `UPDATE groups_clans
+       SET slug = ?, name = ?, description = ?, avatar_type = 'emoji', avatar_value = ?, cover_image = COALESCE(?, cover_image)
+       WHERE id = ?`,
+      [
+        normalizedSlug,
+        normalizedName,
+        normalizedDescription,
+        normalizedEmoji,
+        normalizedCoverImage || null,
+        group.id,
+      ],
+    );
+
+    queueRealtimeEvent(connection, {
+      type: "feed:changed",
+      payload: {
+        reason: "clan-updated",
+        actorId: user.id,
+      },
+    });
+
+    return {
+      id: group.id,
       slug: normalizedSlug,
     };
   });

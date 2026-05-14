@@ -9,6 +9,7 @@ import type { Notification } from "@/lib/types";
 
 const realtimePort = Number(process.env.REALTIME_PORT || 3002);
 const sessionCookieName = "glyph_session";
+const realtimeVersion = 4;
 
 type SessionLookupRow = RowDataPacket & {
   user_id: string;
@@ -17,6 +18,7 @@ type SessionLookupRow = RowDataPacket & {
 type RealtimeClient = {
   socket: WebSocket;
   userId: string;
+  activeConversationId: string | null;
 };
 
 type RealtimeState = {
@@ -24,6 +26,7 @@ type RealtimeState = {
   httpServer: HttpServer;
   wsServer: WebSocketServer;
   port: number;
+  version: number;
 };
 
 export type RealtimeEvent =
@@ -43,7 +46,8 @@ export type RealtimeEvent =
           | "post-liked"
           | "comment-created"
           | "repost-created"
-          | "vote-cast";
+          | "vote-cast"
+          | "clan-updated";
         postId?: string;
         actorId?: string;
       };
@@ -53,6 +57,31 @@ export type RealtimeEvent =
       recipients: string[];
       payload: {
         userId: string;
+      };
+    }
+  | {
+      type: "message:new";
+      recipients: string[];
+      payload: {
+        conversationId: string;
+        messageId: string;
+        senderId: string;
+      };
+    }
+  | {
+      type: "message:changed";
+      recipients: string[];
+      payload: {
+        conversationId: string;
+        messageId: string;
+      };
+    }
+  | {
+      type: "message:typing";
+      recipients: string[];
+      payload: {
+        conversationId: string;
+        senderId: string;
       };
     };
 
@@ -121,8 +150,18 @@ function getRealtimeState() {
 export async function ensureRealtimeServer() {
   const existing = getRealtimeState();
 
-  if (existing) {
+  if (existing?.version === realtimeVersion) {
     return existing;
+  }
+
+  if (existing) {
+    for (const client of existing.clients) {
+      client.socket.close();
+    }
+
+    existing.wsServer.close();
+    await new Promise<void>((resolve) => existing.httpServer.close(() => resolve()));
+    globalThis.__glyphRealtimeState = undefined;
   }
 
   const clients = new Set<RealtimeClient>();
@@ -130,7 +169,7 @@ export async function ensureRealtimeServer() {
   const wsServer = new WebSocketServer({ noServer: true });
 
   wsServer.on("connection", (socket: WebSocket, _request: IncomingMessage, userId: string) => {
-    const client: RealtimeClient = { socket, userId };
+    const client: RealtimeClient = { socket, userId, activeConversationId: null };
     clients.add(client);
 
     socket.send(
@@ -142,6 +181,42 @@ export async function ensureRealtimeServer() {
 
     socket.on("close", () => {
       clients.delete(client);
+    });
+
+    socket.on("message", (rawMessage) => {
+      try {
+        const event = JSON.parse(rawMessage.toString()) as {
+          type?: string;
+          payload?: {
+            conversationId?: string;
+            recipientId?: string;
+          };
+        };
+
+        if (event.type === "message:conversation-active") {
+          client.activeConversationId = event.payload?.conversationId || null;
+          return;
+        }
+
+        if (event.type !== "message:typing" || !event.payload?.conversationId || !event.payload.recipientId) {
+          return;
+        }
+
+        emitToClients(
+          { clients, httpServer, wsServer, port: realtimePort, version: realtimeVersion },
+          (entry) => entry.userId === event.payload?.recipientId,
+          {
+            type: "message:typing",
+            recipients: [event.payload.recipientId],
+            payload: {
+              conversationId: event.payload.conversationId,
+              senderId: userId,
+            },
+          },
+        );
+      } catch {
+        return;
+      }
     });
 
     socket.on("error", () => {
@@ -184,6 +259,7 @@ export async function ensureRealtimeServer() {
     httpServer,
     wsServer,
     port: realtimePort,
+    version: realtimeVersion,
   };
 
   globalThis.__glyphRealtimeState = state;
@@ -203,6 +279,11 @@ export async function emitRealtimeEvent(event: RealtimeEvent) {
     return;
   }
 
+  if (event.type === "message:new" || event.type === "message:changed" || event.type === "message:typing") {
+    emitToClients(state, (client) => event.recipients.includes(client.userId), event);
+    return;
+  }
+
   emitToClients(state, () => true, event);
 }
 
@@ -210,6 +291,22 @@ export function queueRealtimeEvent(connection: PoolConnection, event: RealtimeEv
   onTransactionCommit(connection, async () => {
     await emitRealtimeEvent(event);
   });
+}
+
+export async function isUserViewingConversation(userId: string, conversationId: string) {
+  const state = await ensureRealtimeServer();
+
+  for (const client of state.clients) {
+    if (
+      client.userId === userId &&
+      client.activeConversationId === conversationId &&
+      client.socket.readyState === client.socket.OPEN
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export async function getRealtimeConnectionUrl(request: Request) {

@@ -17,6 +17,7 @@ type MobileNavBarProps = {
   isAdmin?: boolean;
   viewerId?: string;
   initialNotificationCount?: number;
+  initialMessageCount?: number;
 };
 
 function formatNotificationBadge(count: number) {
@@ -26,19 +27,19 @@ function formatNotificationBadge(count: number) {
 function getIconPath(icon: string): string {
   switch (icon) {
     case "feed":
-      return "M3 3h18v2H3V3zm0 8h18v2H3v-2zm0 8h18v2H3v-2z";
+      return "M5 6.5h14M5 12h14M5 17.5h9";
     case "search":
-      return "M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z";
+      return "M10.5 17a6.5 6.5 0 1 1 4.6-1.9L20 20";
     case "bell":
-      return "M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z";
+      return "M18 10.5v3.8l1.5 2.2H4.5L6 14.3v-3.8a6 6 0 0 1 12 0ZM9.8 19a2.4 2.4 0 0 0 4.4 0";
     case "message":
-      return "M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z";
+      return "M5.5 6.5A2.5 2.5 0 0 1 8 4h8a2.5 2.5 0 0 1 2.5 2.5v5A2.5 2.5 0 0 1 16 14h-4.2L7 18v-4H8a2.5 2.5 0 0 1-2.5-2.5v-5Z";
     case "profile":
-      return "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z";
+      return "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0";
     case "group":
-      return "M7 11.5c0-1.66-1.34-3-3-3s-3 1.34-3 3V14h6v-2.5zM4 8c1.38 0 2.5-1.12 2.5-2.5S5.38 3 4 3 1.5 4.12 1.5 5.5 2.62 8 4 8zm9 0c1.38 0 2.5-1.12 2.5-2.5S14.38 3 13 3s-2.5 1.12-2.5 2.5S11.62 8 13 8zm-1 0.5h-1c-1.93 0-3.5 1.57-3.5 3.5V14h9v-2c0-1.93-1.57-3.5-3.5-3.5z";
+      return "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 10a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2ZM3.5 19a5 5 0 0 1 9 0M13.5 18.5a4 4 0 0 1 6.5 0";
     default:
-      return "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z";
+      return "M12 5v14M5 12h14";
   }
 }
 
@@ -48,10 +49,13 @@ export function MobileNavBar({
   isAdmin = false,
   viewerId,
   initialNotificationCount = 0,
+  initialMessageCount = 0,
 }: MobileNavBarProps) {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(initialNotificationCount);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(initialMessageCount);
   const visibleUnreadCount = pathname.startsWith("/notifications") ? 0 : unreadCount;
+  const visibleUnreadMessageCount = pathname.startsWith("/messages") ? 0 : unreadMessageCount;
 
   const navItems = viewerHandle
     ? [
@@ -73,18 +77,28 @@ export function MobileNavBar({
       }
     };
     const onCleared = () => setUnreadCount(0);
+    const onMessage = () => {
+      if (!pathname.startsWith("/messages")) {
+        setUnreadMessageCount((current) => current + 1);
+      }
+    };
+    const onMessagesCleared = () => setUnreadMessageCount(0);
 
     window.addEventListener("glyph:notifications-changed", onNotification);
     window.addEventListener("glyph:notifications-cleared", onCleared);
+    window.addEventListener("glyph:messages-changed", onMessage);
+    window.addEventListener("glyph:messages-cleared", onMessagesCleared);
 
     return () => {
       window.removeEventListener("glyph:notifications-changed", onNotification);
       window.removeEventListener("glyph:notifications-cleared", onCleared);
+      window.removeEventListener("glyph:messages-changed", onMessage);
+      window.removeEventListener("glyph:messages-cleared", onMessagesCleared);
     };
   }, [pathname, viewerId]);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_88%,transparent)] backdrop-blur lg:hidden">
+    <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-50 border-t border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_88%,transparent)] backdrop-blur lg:hidden">
       <div
         className="mx-auto grid max-w-[640px] px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.35rem)] pt-2"
         style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
@@ -108,9 +122,11 @@ export function MobileNavBar({
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
                   className="h-5 w-5"
-                  fill={isActive ? "currentColor" : "none"}
-                  stroke={isActive ? "none" : "currentColor"}
-                  strokeWidth={isActive ? "0" : "2"}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   aria-hidden="true"
                 >
                   <path d={getIconPath(item.icon)} />
@@ -118,6 +134,11 @@ export function MobileNavBar({
                 {item.href === "/notifications" && visibleUnreadCount > 0 ? (
                   <span className="absolute -right-2.5 -top-2.5 inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 py-0.5 text-[9px] font-semibold leading-none text-[var(--page)]">
                     {formatNotificationBadge(visibleUnreadCount)}
+                  </span>
+                ) : null}
+                {item.href === "/messages" && visibleUnreadMessageCount > 0 ? (
+                  <span className="absolute -right-2.5 -top-2.5 inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 py-0.5 text-[9px] font-semibold leading-none text-[var(--page)]">
+                    {formatNotificationBadge(visibleUnreadMessageCount)}
                   </span>
                 ) : null}
               </div>

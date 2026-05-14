@@ -17,6 +17,8 @@ export type User = {
   avatar: Avatar;
   coverImage: string | null;
   createdAt: string;
+  lastSeenAt: string | null;
+  isOnline: boolean;
   verifiedEmailAt: string | null;
   followerIds: string[];
   followingIds: string[];
@@ -31,6 +33,7 @@ export type User = {
 export type Group = {
   id: string;
   slug: string;
+  ownerId: string | null;
   name: string;
   description: string;
   avatar: Avatar;
@@ -80,6 +83,51 @@ export type Notification = {
   link: string;
   createdAt: string;
   read: boolean;
+};
+
+export type MessageUserSummary = {
+  id: string;
+  handle: string;
+  name: string;
+  avatar: Avatar;
+  verificationStatus: VerificationStatus;
+  lastSeenAt: string | null;
+  isOnline: boolean;
+};
+
+export type DirectMessage = {
+  id: string;
+  conversationId: string;
+    senderId: string;
+    content: string;
+    imagePath: string | null;
+    mediaPaths: string[];
+    replyToMessageId: string | null;
+  replyTo: {
+    id: string;
+    senderName: string;
+    content: string;
+    imagePath: string | null;
+    deleted: boolean;
+  } | null;
+  forwardedFromMessageId: string | null;
+  forwardedFrom: {
+    senderName: string;
+  } | null;
+  createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+  deletedForAll: boolean;
+  sender: MessageUserSummary;
+  readByRecipient: boolean;
+};
+
+export type MessageConversation = {
+  id: string;
+  participant: MessageUserSummary;
+  lastMessage: DirectMessage | null;
+  unreadCount: number;
+  updatedAt: string;
 };
 
 export type Session = {

@@ -1,12 +1,12 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import type { AdminPostReport, DecoratedPost, DecoratedPostComment, ThemePreference, User, VerificationStatus } from "@/lib/types";
-import { formatRelativeDate, imageTypes, isHeicAssetUrl, joinClasses, uploadLimits, verificationVideoTypes } from "@/lib/site";
+import type { AdminPostReport, DecoratedPost, DecoratedPostComment, DirectMessage, Group, MessageConversation, MessageUserSummary, ThemePreference, User, VerificationStatus } from "@/lib/types";
+import { formatRelativeDate, imageTypes, isHeicAssetUrl, joinClasses, uploadLimits, verificationVideoTypes, videoTypes } from "@/lib/site";
 import { EmojiPicker } from "@/components/emoji-picker";
 export { MobileNavBar } from "@/components/mobile-nav-bar";
 
@@ -50,9 +50,33 @@ type RealtimeIncomingEvent =
       payload: {
         userId: string;
       };
+    }
+  | {
+      type: "message:new";
+      payload: {
+        conversationId: string;
+        messageId: string;
+        senderId: string;
+      };
+    }
+  | {
+      type: "message:changed";
+      payload: {
+        conversationId: string;
+        messageId: string;
+      };
+    }
+  | {
+      type: "message:typing";
+      payload: {
+        conversationId: string;
+        senderId: string;
+      };
     };
 
-function getUploadLimitText(kind: "avatar" | "cover" | "post" | "verification") {
+type UploadKind = "avatar" | "cover" | "post" | "message" | "verification";
+
+function getUploadLimitText(kind: UploadKind) {
   const maxMb = Math.round(uploadLimits[kind] / (1024 * 1024));
 
   if (kind === "verification") {
@@ -67,13 +91,25 @@ function getUploadLimitText(kind: "avatar" | "cover" | "post" | "verification") 
     return `Максимальный размер изображения для обложки — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP, GIF, HEIC и HEIF.`;
   }
 
+  if (kind === "message") {
+    return `Максимальный размер вложения — ${maxMb} МБ. Поддерживаются изображения JPG, PNG, WEBP, GIF, HEIC, HEIF и видео MP4, WebM, MOV.`;
+  }
+
   return `Максимальный размер изображения — ${maxMb} МБ. Поддерживаются JPG, PNG, WEBP, GIF, HEIC и HEIF.`;
 }
 
-async function uploadFile(file: File, kind: "avatar" | "cover" | "post" | "verification") {
+async function uploadFile(file: File, kind: UploadKind) {
   if (kind === "verification") {
     if (!verificationVideoTypes.includes(file.type as (typeof verificationVideoTypes)[number])) {
       throw new Error("Поддерживаются только видео MP4, WebM или MOV.");
+    }
+  } else if (kind === "message") {
+    const supported =
+      imageTypes.includes(file.type as (typeof imageTypes)[number]) ||
+      videoTypes.includes(file.type as (typeof videoTypes)[number]);
+
+    if (!supported) {
+      throw new Error("Поддерживаются изображения JPG, PNG, WEBP, GIF, HEIC, HEIF и видео MP4, WebM, MOV.");
     }
   } else if (!imageTypes.includes(file.type as (typeof imageTypes)[number])) {
     throw new Error("Поддерживаются только изображения JPG, PNG, WEBP, GIF, HEIC и HEIF.");
@@ -263,65 +299,58 @@ export function CookieNotice() {
 }
 
 function NavGlyph({ icon }: { icon: "feed" | "search" | "bell" | "message" | "profile" | "group" }) {
-  const common = "h-4 w-4 shrink-0";
+  const common = "h-5 w-5 shrink-0";
+  const strokeProps = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
 
   if (icon === "feed") {
     return (
-      <svg viewBox="0 0 16 16" fill="none" className={common} aria-hidden="true">
-        <rect x="2.5" y="3" width="11" height="2.25" rx="1.125" fill="currentColor" />
-        <rect x="2.5" y="6.875" width="11" height="2.25" rx="1.125" fill="currentColor" opacity="0.78" />
-        <rect x="2.5" y="10.75" width="7.5" height="2.25" rx="1.125" fill="currentColor" opacity="0.58" />
+      <svg viewBox="0 0 24 24" className={common} aria-hidden="true" {...strokeProps}>
+        <path d="M5 6.5h14M5 12h14M5 17.5h9" />
       </svg>
     );
   }
 
   if (icon === "search") {
     return (
-      <svg viewBox="0 0 16 16" fill="none" className={common} aria-hidden="true">
-        <circle cx="7" cy="7" r="3.75" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M10.25 10.25L13.25 13.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <svg viewBox="0 0 24 24" className={common} aria-hidden="true" {...strokeProps}>
+        <path d="M10.5 17a6.5 6.5 0 1 1 4.6-1.9L20 20" />
       </svg>
     );
   }
 
   if (icon === "bell") {
     return (
-      <svg viewBox="0 0 16 16" fill="none" className={common} aria-hidden="true">
-        <path
-          d="M8 2.5C6.2 2.5 4.75 3.95 4.75 5.75V7.24C4.75 7.84 4.55 8.42 4.18 8.89L3.35 9.93C2.72 10.72 3.28 11.9 4.29 11.9H11.71C12.72 11.9 13.28 10.72 12.65 9.93L11.82 8.89C11.45 8.42 11.25 7.84 11.25 7.24V5.75C11.25 3.95 9.8 2.5 8 2.5Z"
-          fill="currentColor"
-        />
-        <path d="M6.35 12.35C6.65 13.05 7.26 13.5 8 13.5C8.74 13.5 9.35 13.05 9.65 12.35" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <svg viewBox="0 0 24 24" className={common} aria-hidden="true" {...strokeProps}>
+        <path d="M18 10.5v3.8l1.5 2.2H4.5L6 14.3v-3.8a6 6 0 0 1 12 0ZM9.8 19a2.4 2.4 0 0 0 4.4 0" />
       </svg>
     );
   }
 
   if (icon === "message") {
     return (
-      <svg viewBox="0 0 16 16" fill="none" className={common} aria-hidden="true">
-        <path
-          d="M3 4.75C3 3.78 3.78 3 4.75 3H11.25C12.22 3 13 3.78 13 4.75V8.85C13 9.82 12.22 10.6 11.25 10.6H7.35L4.55 12.8V10.6H4.75C3.78 10.6 3 9.82 3 8.85V4.75Z"
-          fill="currentColor"
-        />
+      <svg viewBox="0 0 24 24" className={common} aria-hidden="true" {...strokeProps}>
+        <path d="M5.5 6.5A2.5 2.5 0 0 1 8 4h8a2.5 2.5 0 0 1 2.5 2.5v5A2.5 2.5 0 0 1 16 14h-4.2L7 18v-4H8a2.5 2.5 0 0 1-2.5-2.5v-5Z" />
       </svg>
     );
   }
 
   if (icon === "group") {
     return (
-      <svg viewBox="0 0 16 16" fill="none" className={common} aria-hidden="true">
-        <circle cx="5.1" cy="5.4" r="1.9" fill="currentColor" opacity="0.78" />
-        <circle cx="10.9" cy="5.4" r="1.9" fill="currentColor" />
-        <path d="M2.9 12.9C2.9 11.2 4.22 9.9 5.85 9.9H6.35C7.98 9.9 9.3 11.2 9.3 12.9V13H2.9V12.9Z" fill="currentColor" opacity="0.78" />
-        <path d="M6.7 12.9C6.7 11.07 8.1 9.65 9.85 9.65H11.15C12.9 9.65 14.3 11.07 14.3 12.9V13H6.7V12.9Z" fill="currentColor" />
+      <svg viewBox="0 0 24 24" className={common} aria-hidden="true" {...strokeProps}>
+        <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 10a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2ZM3.5 19a5 5 0 0 1 9 0M13.5 18.5a4 4 0 0 1 6.5 0" />
       </svg>
     );
   }
 
   return (
-    <svg viewBox="0 0 16 16" fill="none" className={common} aria-hidden="true">
-      <circle cx="8" cy="5.4" r="2.4" fill="currentColor" />
-      <path d="M3.75 12.9C3.75 10.91 5.46 9.3 7.58 9.3H8.42C10.54 9.3 12.25 10.91 12.25 12.9V13H3.75V12.9Z" fill="currentColor" />
+    <svg viewBox="0 0 24 24" className={common} aria-hidden="true" {...strokeProps}>
+      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0" />
     </svg>
   );
 }
@@ -365,24 +394,65 @@ function useUnreadNotificationCount({
   return visibleCount;
 }
 
+function useUnreadMessageCount({
+  enabled,
+  initialCount,
+}: {
+  enabled: boolean;
+  initialCount: number;
+}) {
+  const pathname = usePathname();
+  const [count, setCount] = useState(initialCount);
+  const visibleCount = pathname.startsWith("/messages") ? 0 : count;
+
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") {
+      return;
+    }
+
+    const onMessage = () => {
+      if (!pathname.startsWith("/messages")) {
+        setCount((current) => current + 1);
+      }
+    };
+    const onCleared = () => setCount(0);
+
+    window.addEventListener("glyph:messages-changed", onMessage);
+    window.addEventListener("glyph:messages-cleared", onCleared);
+
+    return () => {
+      window.removeEventListener("glyph:messages-changed", onMessage);
+      window.removeEventListener("glyph:messages-cleared", onCleared);
+    };
+  }, [enabled, pathname]);
+
+  return visibleCount;
+}
+
 export function NavLink({
   href,
   label,
   icon,
   viewerId,
   initialNotificationCount = 0,
+  initialMessageCount = 0,
 }: {
   href: string;
   label: string;
   icon: "feed" | "search" | "bell" | "message" | "profile" | "group";
   viewerId?: string;
   initialNotificationCount?: number;
+  initialMessageCount?: number;
 }) {
   const pathname = usePathname();
   const active = pathname === href || (href !== "/" && pathname.startsWith(href));
   const unreadCount = useUnreadNotificationCount({
     enabled: href === "/notifications" && Boolean(viewerId),
     initialCount: initialNotificationCount,
+  });
+  const unreadMessageCount = useUnreadMessageCount({
+    enabled: href === "/messages" && Boolean(viewerId),
+    initialCount: initialMessageCount,
   });
 
   return (
@@ -400,6 +470,11 @@ export function NavLink({
         {href === "/notifications" && unreadCount > 0 ? (
           <span className="absolute -right-2.5 -top-2.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--page)] shadow-[0_10px_24px_-12px_rgba(132,184,44,0.9)]">
             {formatNotificationBadge(unreadCount)}
+          </span>
+        ) : null}
+        {href === "/messages" && unreadMessageCount > 0 ? (
+          <span className="absolute -right-2.5 -top-2.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-[var(--page)] shadow-[0_10px_24px_-12px_rgba(132,184,44,0.9)]">
+            {formatNotificationBadge(unreadMessageCount)}
           </span>
         ) : null}
       </div>
@@ -1266,6 +1341,7 @@ export function AuthForm({
   const [error, setError] = useState(initialError);
   const [success, setSuccess] = useState("");
   const [previewLink, setPreviewLink] = useState("");
+  const [selectedEmoji, setSelectedEmoji] = useState("✨");
 
   const title = mode === "login" ? "Вход в GLYPH" : "Регистрация в GLYPH";
 
@@ -1297,6 +1373,7 @@ export function AuthForm({
                 handle: formData.get("handle"),
                 email: formData.get("email"),
                 password: formData.get("password"),
+                avatarEmoji: selectedEmoji,
               };
 
         try {
@@ -1339,6 +1416,13 @@ export function AuthForm({
           <label className="grid gap-2 text-sm">
             <span className="text-[var(--muted)]">Email</span>
             <input name="email" type="email" required placeholder="you@example.com" className={fieldClass} />
+          </label>
+          <label className="grid gap-2 text-sm">
+            <span className="text-[var(--muted)]">Эмодзи-аватар</span>
+            <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
+            <span className="text-xs text-orange-400/80">
+              Эмодзи выбирается только при регистрации. Подумайте, какой знак будет вашим образом в GLYPH.
+            </span>
           </label>
         </>
       ) : (
@@ -1557,6 +1641,7 @@ export function RealtimeBridge({ viewerId }: { viewerId: string }) {
     let reconnectTimer: number | null = null;
     let closedByEffect = false;
     let refreshTimer: number | null = null;
+    let presenceTimer: number | null = null;
 
     const scheduleRefresh = () => {
       if (refreshTimer !== null) {
@@ -1617,6 +1702,21 @@ export function RealtimeBridge({ viewerId }: { viewerId: string }) {
 
           if (event.type === "profile:changed" && pathname.startsWith("/profile/")) {
             scheduleRefresh();
+            return;
+          }
+
+          if (event.type === "message:new" || event.type === "message:changed") {
+            window.dispatchEvent(new Event("glyph:messages-changed"));
+
+            if (pathname.startsWith("/messages")) {
+              scheduleRefresh();
+            }
+
+            return;
+          }
+
+          if (event.type === "message:typing") {
+            window.dispatchEvent(new CustomEvent("glyph:message-typing", { detail: event.payload }));
           }
         };
 
@@ -1637,6 +1737,33 @@ export function RealtimeBridge({ viewerId }: { viewerId: string }) {
     };
 
     void connect();
+    const sendSocketEvent = (type: string, detail: Record<string, string>) => {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      socket.send(
+        JSON.stringify({
+          type,
+          payload: detail,
+        }),
+      );
+    };
+
+    const onTypingSend = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<{ conversationId: string; recipientId: string }>;
+      sendSocketEvent("message:typing", event.detail);
+    };
+    const onActiveConversation = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<{ conversationId: string }>;
+      sendSocketEvent("message:conversation-active", event.detail);
+    };
+
+    window.addEventListener("glyph:message-typing-send", onTypingSend as EventListener);
+    window.addEventListener("glyph:message-conversation-active", onActiveConversation as EventListener);
+    presenceTimer = window.setInterval(() => {
+      void fetch("/api/realtime/bootstrap", { cache: "no-store" });
+    }, 45000);
 
     return () => {
       closedByEffect = true;
@@ -1649,6 +1776,12 @@ export function RealtimeBridge({ viewerId }: { viewerId: string }) {
         window.clearTimeout(refreshTimer);
       }
 
+      if (presenceTimer !== null) {
+        window.clearInterval(presenceTimer);
+      }
+
+      window.removeEventListener("glyph:message-typing-send", onTypingSend as EventListener);
+      window.removeEventListener("glyph:message-conversation-active", onActiveConversation as EventListener);
       socket?.close();
     };
   }, [pathname, router, viewerId]);
@@ -1666,6 +1799,1386 @@ export function NotificationsReadBridge() {
   }, []);
 
   return null;
+}
+
+function MessageAvatar({ user }: { user: MessageUserSummary }) {
+  const statusDot = user.isOnline ? (
+    <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[var(--panel)] bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.9)]" />
+  ) : null;
+
+  if (user.avatar.type === "image") {
+    return (
+      <div className="relative h-11 w-11 shrink-0">
+        <Image
+          alt={user.name}
+          src={user.avatar.value}
+          width={44}
+          height={44}
+          className="h-11 w-11 rounded-full border border-[var(--line)] object-cover"
+        />
+        {statusDot}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-11 w-11 shrink-0">
+      <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] text-xl">
+        {user.avatar.value}
+      </div>
+      {statusDot}
+    </div>
+  );
+}
+
+function MessageAuthorLine({ user }: { user: MessageUserSummary }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <span className="truncate text-sm font-semibold text-[var(--text)]">{user.name}</span>
+      <span className="text-xs text-[var(--muted)]">@{user.handle}</span>
+      {user.verificationStatus === "approved" ? (
+        <span className="rounded-full bg-[#0f3b6c] px-2 py-0.5 text-[10px] font-semibold text-[#90c8ff]">Вериф.</span>
+      ) : null}
+    </div>
+  );
+}
+
+function getMessageDateKey(value: string) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function formatMessageDate(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (getMessageDateKey(value) === getMessageDateKey(today.toISOString())) {
+    return "Сегодня";
+  }
+
+  if (getMessageDateKey(value) === getMessageDateKey(yesterday.toISOString())) {
+    return "Вчера";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+  }).format(date);
+}
+
+function formatPresence(user: MessageUserSummary) {
+  if (user.isOnline) {
+    return "в сети";
+  }
+
+  if (!user.lastSeenAt) {
+    return "был(а) давно";
+  }
+
+  return `был(а) ${formatRelativeDate(user.lastSeenAt)}`;
+}
+
+function isVideoMessageAsset(value: string | null | undefined) {
+  return Boolean(value && /\.(mp4|webm|mov)(\?|$)/i.test(value));
+}
+
+function getMessageMediaLabel(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  return isVideoMessageAsset(value) ? "Видео" : "Фото";
+}
+
+function getMessageMediaGroupClass(count: number) {
+  if (count === 1) {
+    return "";
+  }
+
+  if (count === 2) {
+    return "grid-cols-2";
+  }
+
+  return "grid-cols-2 sm:grid-cols-3";
+}
+
+function formatMediaTime(value: number) {
+  if (!Number.isFinite(value)) {
+    return "0:00";
+  }
+
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60);
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function MessageMediaPreview({
+  src,
+  onOpen,
+  grouped = false,
+}: {
+  src: string;
+  onOpen: () => void;
+  grouped?: boolean;
+}) {
+  const isVideo = isVideoMessageAsset(src);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={joinClasses(
+        "group relative block overflow-hidden rounded-[18px] bg-black/35 text-left",
+        grouped ? "aspect-square" : "w-[min(360px,76vw)] sm:w-[390px]",
+      )}
+      aria-label={isVideo ? "Открыть видео" : "Открыть изображение"}
+    >
+      {isVideo ? (
+        <>
+          <video
+            src={src}
+            preload="metadata"
+            className={joinClasses(
+              "w-full object-cover",
+              grouped ? "h-full" : "max-h-[300px]",
+            )}
+            muted
+          />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/18">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/62 text-white shadow-[0_18px_45px_-22px_rgba(0,0,0,0.9)] transition group-hover:scale-105">
+              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="currentColor" aria-hidden="true">
+                <path d="M9 7.5v9l7-4.5-7-4.5Z" />
+              </svg>
+            </span>
+          </span>
+        </>
+      ) : isHeicAssetUrl(src) ? (
+        <img
+          src={src}
+          alt="Вложение"
+          className={joinClasses(
+            "w-full object-cover",
+            grouped ? "h-full" : "max-h-[300px]",
+          )}
+        />
+      ) : (
+        <Image
+          src={src}
+          alt="Вложение"
+          width={900}
+          height={700}
+          className={joinClasses(
+            "w-full object-cover",
+            grouped ? "h-full" : "h-auto max-h-[300px]",
+          )}
+        />
+      )}
+      <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white/90 backdrop-blur">
+        {getMessageMediaLabel(src)}
+      </span>
+    </button>
+  );
+}
+
+function MessageMediaViewer({
+  items,
+  currentIndex,
+  onClose,
+  onNavigate,
+}: {
+  items: Array<{ src: string; label: string }>;
+  currentIndex: number | null;
+  onClose: () => void;
+  onNavigate: (index: number) => void;
+}) {
+  const media = currentIndex === null ? null : items[currentIndex] ?? null;
+
+  useEffect(() => {
+    if (!media) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+      if (event.key === "ArrowLeft" && currentIndex !== null && items.length > 1) {
+        onNavigate((currentIndex - 1 + items.length) % items.length);
+      }
+      if (event.key === "ArrowRight" && currentIndex !== null && items.length > 1) {
+        onNavigate((currentIndex + 1) % items.length);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [currentIndex, items.length, media, onClose, onNavigate]);
+
+  if (!media) {
+    return null;
+  }
+
+  const isVideo = isVideoMessageAsset(media.src);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[120] grid bg-black/88 backdrop-blur-md" onClick={onClose}>
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4 text-white/80">
+        <div className="rounded-full bg-black/30 px-3 py-1 text-sm">{media.label}</div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-2xl leading-none hover:bg-white/10"
+          aria-label="Закрыть просмотр"
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex min-h-0 items-center justify-center p-4" onClick={(event) => event.stopPropagation()}>
+        {isVideo ? (
+          <MessageVideoPlayer src={media.src} />
+        ) : isHeicAssetUrl(media.src) ? (
+          <img src={media.src} alt={media.label} className="max-h-[86vh] max-w-[92vw] rounded-[22px] object-contain shadow-[0_30px_90px_-42px_rgba(0,0,0,0.95)]" />
+        ) : (
+          <Image src={media.src} alt={media.label} width={1600} height={1200} className="max-h-[86vh] max-w-[92vw] rounded-[22px] object-contain shadow-[0_30px_90px_-42px_rgba(0,0,0,0.95)]" />
+        )}
+      </div>
+      {items.length > 1 ? (
+        <>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onNavigate(((currentIndex ?? 0) - 1 + items.length) % items.length);
+            }}
+            className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-3xl text-white/80 hover:bg-white/10"
+            aria-label="Предыдущее медиа"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onNavigate(((currentIndex ?? 0) + 1) % items.length);
+            }}
+            className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-3xl text-white/80 hover:bg-white/10"
+            aria-label="Следующее медиа"
+          >
+            ›
+          </button>
+        </>
+      ) : null}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between p-4 text-white/70">
+        <div className="rounded-full bg-black/30 px-3 py-1 text-xs">
+          {items.length > 1 ? `${(currentIndex ?? 0) + 1} из ${items.length} · ← → листать · Esc — закрыть` : "Esc — закрыть"}
+        </div>
+        <a
+          href={media.src}
+          download
+          className="pointer-events-auto rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/16"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Скачать
+        </a>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function MessageVideoPlayer({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hideControlsTimerRef = useRef<number | null>(null);
+  const [playing, setPlaying] = useState(true);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(0.9);
+  const [controlsVisible, setControlsVisible] = useState(true);
+
+  useEffect(() => {
+    return () => {
+      if (hideControlsTimerRef.current !== null) {
+        window.clearTimeout(hideControlsTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showControls = () => {
+    setControlsVisible(true);
+
+    if (hideControlsTimerRef.current !== null) {
+      window.clearTimeout(hideControlsTimerRef.current);
+    }
+
+    hideControlsTimerRef.current = window.setTimeout(() => {
+      setControlsVisible(false);
+    }, 1800);
+  };
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    if (video.paused) {
+      void video.play();
+      setPlaying(true);
+      showControls();
+    } else {
+      video.pause();
+      setPlaying(false);
+      setControlsVisible(true);
+    }
+  };
+
+  const seek = (value: number) => {
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    video.currentTime = value;
+    setCurrentTime(value);
+  };
+
+  const changeVolume = (value: number) => {
+    const video = videoRef.current;
+
+    setVolume(value);
+
+    if (video) {
+      video.volume = value;
+    }
+  };
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-[22px] border border-white/10 bg-black shadow-[0_30px_90px_-42px_rgba(0,0,0,0.95)]"
+      onMouseEnter={showControls}
+      onMouseMove={showControls}
+      onMouseLeave={() => {
+        if (playing) {
+          setControlsVisible(false);
+        }
+      }}
+      onFocusCapture={() => setControlsVisible(true)}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        autoPlay
+        className="max-h-[86vh] max-w-[92vw] bg-black"
+        onClick={togglePlay}
+        onLoadedMetadata={(event) => {
+          setDuration(event.currentTarget.duration || 0);
+          event.currentTarget.volume = volume;
+        }}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onPlay={() => {
+          setPlaying(true);
+          showControls();
+        }}
+        onPause={() => {
+          setPlaying(false);
+          setControlsVisible(true);
+        }}
+      />
+      <div
+        className={joinClasses(
+          "absolute inset-x-3 bottom-3 rounded-[18px] border border-white/10 bg-black/62 p-3 text-white shadow-[0_18px_50px_-28px_rgba(0,0,0,0.95)] backdrop-blur transition duration-200",
+          controlsVisible || !playing ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0 pointer-events-none",
+        )}
+      >
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          step={0.1}
+          value={Math.min(currentTime, duration || currentTime)}
+          onChange={(event) => seek(Number(event.target.value))}
+          className="w-full accent-[var(--accent)]"
+          aria-label="Прогресс видео"
+        />
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-semibold hover:bg-white/16"
+            aria-label={playing ? "Пауза" : "Воспроизвести"}
+          >
+            {playing ? "Ⅱ" : "▶"}
+          </button>
+          <div className="min-w-[88px] text-xs text-white/78">
+            {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-white/65">Звук</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(event) => changeVolume(Number(event.target.value))}
+              className="w-24 accent-[var(--accent)]"
+              aria-label="Громкость видео"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function MessagesPanel({
+  viewerId,
+  conversations,
+  messages,
+  activeConversation,
+  candidates,
+  search,
+}: {
+  viewerId: string;
+  conversations: MessageConversation[];
+  messages: DirectMessage[];
+  activeConversation: MessageConversation | null;
+  candidates: MessageUserSummary[];
+  search: string;
+}) {
+  const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [pendingConversationHandle, setPendingConversationHandle] = useState("");
+  const [pendingMessage, setPendingMessage] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [error, setError] = useState("");
+  const [typingConversationId, setTypingConversationId] = useState("");
+  const [messageFiles, setMessageFiles] = useState<File[]>([]);
+  const [messageFilePreviews, setMessageFilePreviews] = useState<Array<{ name: string; url: string; type: string }>>([]);
+  const [openMediaIndex, setOpenMediaIndex] = useState<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: DirectMessage } | null>(null);
+  const [replyTarget, setReplyTarget] = useState<DirectMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<DirectMessage | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<DirectMessage | null>(null);
+  const [listMenuOpen, setListMenuOpen] = useState(false);
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatMessageSearch, setChatMessageSearch] = useState("");
+  const lastTypingSentAtRef = useRef(0);
+  const mediaItems = useMemo(
+    () =>
+      messages.flatMap((message) =>
+        message.mediaPaths.map((src) => ({
+          src,
+          label: `${getMessageMediaLabel(src)} от ${message.sender.name}`,
+        })),
+      ),
+    [messages],
+  );
+  const visibleMessages = useMemo(() => {
+    const query = chatMessageSearch.trim().toLowerCase();
+
+    if (!query) {
+      return messages;
+    }
+
+    return messages.filter((message) => {
+      const mediaLabel = message.mediaPaths.map((path) => getMessageMediaLabel(path)).join(" ");
+      return `${message.content} ${message.sender.name} ${mediaLabel}`.toLowerCase().includes(query);
+    });
+  }, [chatMessageSearch, messages]);
+
+  useEffect(() => {
+    window.dispatchEvent(new Event("glyph:messages-cleared"));
+  }, []);
+
+  useEffect(() => {
+    const previews = messageFiles.map((file) => ({
+      name: file.name,
+      url: URL.createObjectURL(file),
+      type: file.type,
+    }));
+
+    setMessageFilePreviews(previews);
+
+    return () => {
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [messageFiles]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length, activeConversation?.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      router.refresh();
+    }, 45000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (!activeConversation) {
+      return;
+    }
+
+    setChatMenuOpen(false);
+    setChatSearchOpen(false);
+    setChatMessageSearch("");
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        router.push("/messages");
+        router.refresh();
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeConversation, router]);
+
+  useEffect(() => {
+    if (!activeConversation) {
+      return;
+    }
+
+    const announceActiveConversation = () => {
+      window.dispatchEvent(
+        new CustomEvent("glyph:message-conversation-active", {
+          detail: {
+            conversationId: activeConversation.id,
+          },
+        }),
+      );
+    };
+
+    announceActiveConversation();
+    const timer = window.setInterval(announceActiveConversation, 15000);
+
+    const onTyping = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<{ conversationId: string; senderId: string }>;
+
+      if (
+        event.detail.conversationId !== activeConversation.id ||
+        event.detail.senderId !== activeConversation.participant.id
+      ) {
+        return;
+      }
+
+      setTypingConversationId(event.detail.conversationId);
+      window.setTimeout(() => {
+        setTypingConversationId((current) => (current === event.detail.conversationId ? "" : current));
+      }, 2600);
+    };
+
+    window.addEventListener("glyph:message-typing", onTyping as EventListener);
+
+    return () => {
+      window.clearInterval(timer);
+      window.dispatchEvent(
+        new CustomEvent("glyph:message-conversation-active", {
+          detail: {
+            conversationId: "",
+          },
+        }),
+      );
+      window.removeEventListener("glyph:message-typing", onTyping as EventListener);
+    };
+  }, [activeConversation]);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const close = () => setContextMenu(null);
+
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", close);
+    window.addEventListener("scroll", close, true);
+
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
+
+  const updateMessageText = (value: string) => {
+    setMessageText(value);
+
+    if (!activeConversation || !value.trim()) {
+      return;
+    }
+
+    const now = Date.now();
+
+    if (now - lastTypingSentAtRef.current < 1400) {
+      return;
+    }
+
+    lastTypingSentAtRef.current = now;
+    window.dispatchEvent(
+      new CustomEvent("glyph:message-typing-send", {
+        detail: {
+          conversationId: activeConversation.id,
+          recipientId: activeConversation.participant.id,
+        },
+      }),
+    );
+  };
+
+  const startConversation = async (handle: string) => {
+    setPendingConversationHandle(handle);
+    setError("");
+
+    try {
+      const response = await requestJson<{ conversationId: string }>("/api/messages/start", { handle });
+      router.push(`/messages?conversation=${response.conversationId}`);
+      router.refresh();
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Не удалось открыть диалог.");
+    } finally {
+      setPendingConversationHandle("");
+    }
+  };
+
+  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!activeConversation || pendingMessage) {
+      return;
+    }
+
+    setPendingMessage(true);
+    setError("");
+
+    try {
+      if (editingMessage) {
+        await requestJson("/api/messages/edit", {
+          messageId: editingMessage.id,
+          content: messageText,
+        });
+      } else if (messageFiles.length) {
+        const uploadedPaths: string[] = [];
+
+        for (const file of messageFiles) {
+          uploadedPaths.push(await uploadFile(file, "message"));
+        }
+
+        await requestJson("/api/messages/send", {
+          conversationId: activeConversation.id,
+          content: messageText,
+          mediaPath: uploadedPaths[0] ?? "",
+          mediaPaths: uploadedPaths,
+          replyToMessageId: replyTarget?.id ?? "",
+        });
+      } else {
+        await requestJson("/api/messages/send", {
+          conversationId: activeConversation.id,
+          content: messageText,
+          mediaPath: "",
+          replyToMessageId: replyTarget?.id ?? "",
+        });
+      }
+      setMessageText("");
+      setMessageFiles([]);
+      setReplyTarget(null);
+      setEditingMessage(null);
+      window.dispatchEvent(new Event("glyph:messages-changed"));
+      router.refresh();
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Не удалось отправить сообщение.");
+    } finally {
+      setPendingMessage(false);
+    }
+  };
+
+  const copyMessageText = async (message: DirectMessage) => {
+    if (!message.content || typeof navigator === "undefined") {
+      return;
+    }
+
+    await navigator.clipboard.writeText(message.content);
+  };
+
+  const startReply = (message: DirectMessage) => {
+    if (message.deletedForAll) {
+      return;
+    }
+
+    setEditingMessage(null);
+    setReplyTarget(message);
+    setContextMenu(null);
+  };
+
+  const startEdit = (message: DirectMessage) => {
+    if (message.senderId !== viewerId || message.deletedForAll || message.mediaPaths.length) {
+      return;
+    }
+
+    setReplyTarget(null);
+    setEditingMessage(message);
+    setMessageText(message.content);
+    setContextMenu(null);
+  };
+
+  const deleteMessage = async (message: DirectMessage, scope: "me" | "all") => {
+    setContextMenu(null);
+    setError("");
+
+    try {
+      await requestJson("/api/messages/delete", {
+        messageId: message.id,
+        scope,
+      });
+      window.dispatchEvent(new Event("glyph:messages-changed"));
+      router.refresh();
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Не удалось удалить сообщение.");
+    }
+  };
+
+  const forwardMessage = async (conversationId: string) => {
+    if (!forwardingMessage) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await requestJson("/api/messages/forward", {
+        messageId: forwardingMessage.id,
+        conversationId,
+      });
+      setForwardingMessage(null);
+      window.dispatchEvent(new Event("glyph:messages-changed"));
+      router.refresh();
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Не удалось переслать сообщение.");
+    }
+  };
+
+  return (
+    <div className="grid h-full overflow-hidden rounded-none border border-[var(--line)] bg-[var(--panel)] shadow-[0_24px_70px_-48px_rgba(0,0,0,0.95)] lg:grid-cols-[360px_minmax(0,1fr)] min-[2400px]:lg:grid-cols-[420px_minmax(0,1fr)]">
+      <aside
+        className={joinClasses(
+          "min-h-0 flex-col border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_88%,black)] lg:flex lg:border-b-0 lg:border-r",
+          activeConversation ? "hidden" : "flex",
+        )}
+      >
+        <form action="/messages" className="relative flex min-h-[72px] items-center border-b border-[var(--line)] p-4">
+          <div className="flex w-full items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setListMenuOpen((value) => !value)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--line)] text-[var(--muted)] transition hover:bg-white/[0.04] hover:text-[var(--text)]"
+              aria-label="Меню сообщений"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Найти собеседника</span>
+              <input
+                type="search"
+                name="q"
+                defaultValue={search}
+                placeholder="Поиск"
+                className="h-10 w-full rounded-full border border-[var(--line)] bg-[var(--panel-soft)] px-4 text-sm outline-none transition focus:border-[var(--accent)]/70"
+              />
+            </label>
+            <button
+              type="submit"
+              className="h-10 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--page)] hover:opacity-90"
+            >
+              Найти
+            </button>
+          </div>
+          {listMenuOpen ? (
+            <div className="absolute left-4 top-[62px] z-30 w-64 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]">
+              <Link href="/messages" className="block rounded-[14px] px-3 py-2.5 text-[var(--text)] hover:bg-white/[0.05]" onClick={() => setListMenuOpen(false)}>
+                Все диалоги
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.querySelector<HTMLInputElement>('input[name="q"]');
+                  input?.focus();
+                  setListMenuOpen(false);
+                }}
+                className="block w-full rounded-[14px] px-3 py-2.5 text-left text-[var(--text)] hover:bg-white/[0.05]"
+              >
+                Найти пользователя
+              </button>
+              <Link href="/search" className="block rounded-[14px] px-3 py-2.5 text-[var(--muted)] hover:bg-white/[0.05] hover:text-[var(--text)]" onClick={() => setListMenuOpen(false)}>
+                Общий поиск GLYPH
+              </Link>
+            </div>
+          ) : null}
+        </form>
+
+        {candidates.length ? (
+          <div className="grid gap-2 border-b border-[var(--line)] p-3">
+            {candidates.map((candidate) => (
+              <button
+                key={candidate.id}
+                type="button"
+                disabled={Boolean(pendingConversationHandle)}
+                onClick={() => startConversation(candidate.handle)}
+                className="flex items-center gap-3 rounded-[22px] bg-[var(--panel-soft)] p-3 text-left transition hover:bg-white/[0.04] disabled:opacity-50"
+              >
+                <MessageAvatar user={candidate} />
+                <div className="min-w-0 flex-1">
+                  <MessageAuthorLine user={candidate} />
+                  <div className="mt-1 text-xs text-[var(--muted)]">
+                    {pendingConversationHandle === candidate.handle ? "Открываем..." : "Начать диалог"}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="min-h-[260px] flex-1 overflow-y-auto p-3">
+          <div className="mb-2 px-2 text-sm font-semibold text-[var(--text)]">Диалоги</div>
+          {conversations.length ? (
+            conversations.map((conversation) => {
+              const active = activeConversation?.id === conversation.id;
+
+              return (
+                <Link
+                  key={conversation.id}
+                  href={`/messages?conversation=${conversation.id}`}
+                  className={joinClasses(
+                    "mb-2 flex items-center gap-3 rounded-[22px] p-3 transition",
+                    active
+                      ? "bg-[var(--accent)]/16"
+                      : "hover:bg-white/[0.04]",
+                  )}
+                >
+                  <MessageAvatar user={conversation.participant} />
+                  <div className="min-w-0 flex-1">
+                    <MessageAuthorLine user={conversation.participant} />
+                    <div className="mt-1 truncate text-xs text-[var(--muted)]">
+                      {conversation.lastMessage?.content ||
+                        getMessageMediaLabel(conversation.lastMessage?.imagePath) ||
+                        "Диалог создан"}
+                    </div>
+                  </div>
+                  {conversation.unreadCount > 0 ? (
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-[var(--accent)] px-2 py-1 text-xs font-semibold text-[var(--page)]">
+                      {formatNotificationBadge(conversation.unreadCount)}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })
+          ) : (
+            <div className="rounded-[22px] border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
+              Пока нет диалогов. Найдите пользователя выше и начните переписку.
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <section
+        className={joinClasses(
+          "message-chat-surface min-h-[620px] min-w-0 flex-col overflow-hidden lg:flex lg:min-h-0",
+          activeConversation ? "flex" : "hidden",
+        )}
+      >
+        {activeConversation ? (
+          <>
+            <div className="flex min-h-[72px] items-center justify-between gap-3 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_92%,black)] px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Link
+                  href="/messages"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--muted)] hover:bg-white/[0.05] hover:text-[var(--text)] lg:hidden"
+                  aria-label="Вернуться к списку диалогов"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                    <path d="M15 5 8 12l7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </Link>
+                <MessageAvatar user={activeConversation.participant} />
+                <div className="min-w-0">
+                  <MessageAuthorLine user={activeConversation.participant} />
+                  <div className={joinClasses("mt-1 text-xs", activeConversation.participant.isOnline ? "text-emerald-300" : "text-[var(--muted)]")}>
+                    {typingConversationId === activeConversation.id ? "печатает..." : formatPresence(activeConversation.participant)}
+                  </div>
+                </div>
+              </div>
+              <div className="relative flex items-center gap-1 text-[var(--muted)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatSearchOpen((value) => !value);
+                    setChatMenuOpen(false);
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/[0.05] hover:text-[var(--text)]"
+                  aria-label="Поиск по диалогу"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                    <path d="M10.5 17a6.5 6.5 0 1 1 4.6-1.9L20 20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatMenuOpen((value) => !value);
+                    setChatSearchOpen(false);
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/[0.05] hover:text-[var(--text)]"
+                  aria-label="Меню диалога"
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                    <path d="M12 7.2h.01M12 12h.01M12 16.8h.01" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {chatMenuOpen ? (
+                  <div className="absolute right-0 top-11 z-[120] w-60 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]">
+                    <Link
+                      href={`/profile/${activeConversation.participant.handle}`}
+                      className="block rounded-[14px] px-3 py-2.5 text-[var(--text)] hover:bg-white/[0.05]"
+                      onClick={() => setChatMenuOpen(false)}
+                    >
+                      Открыть профиль
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChatSearchOpen(true);
+                        setChatMenuOpen(false);
+                      }}
+                      className="block w-full rounded-[14px] px-3 py-2.5 text-left text-[var(--text)] hover:bg-white/[0.05]"
+                    >
+                      Найти в диалоге
+                    </button>
+                    <Link
+                      href="/messages"
+                      className="block rounded-[14px] px-3 py-2.5 text-[var(--muted)] hover:bg-white/[0.05] hover:text-[var(--text)]"
+                      onClick={() => setChatMenuOpen(false)}
+                    >
+                      Закрыть диалог
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            {chatSearchOpen ? (
+              <div className="border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_88%,black)] px-4 py-3">
+                <div className="mx-auto flex max-w-[980px] items-center gap-2">
+                  <label className="min-w-0 flex-1">
+                    <span className="sr-only">Поиск по сообщениям</span>
+                    <input
+                      type="search"
+                      value={chatMessageSearch}
+                      onChange={(event) => setChatMessageSearch(event.target.value)}
+                      autoFocus
+                      placeholder="Найти сообщение..."
+                      className="h-10 w-full rounded-full border border-[var(--line)] bg-[var(--panel-soft)] px-4 text-sm outline-none transition focus:border-[var(--accent)]/70"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChatMessageSearch("");
+                      setChatSearchOpen(false);
+                    }}
+                    className="h-10 rounded-full border border-[var(--line)] px-4 text-sm font-semibold text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                  >
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8">
+              {visibleMessages.length ? (
+                <div className="mx-auto grid max-w-[980px] gap-2">
+                  {visibleMessages.map((message, index) => {
+                    const own = message.senderId === viewerId;
+                    const previous = visibleMessages[index - 1];
+                    const showDate = !previous || getMessageDateKey(previous.createdAt) !== getMessageDateKey(message.createdAt);
+                    const mediaPaths = message.mediaPaths.length ? message.mediaPaths : message.imagePath ? [message.imagePath] : [];
+                    const isMediaGroup = mediaPaths.length > 1;
+
+                    return (
+                      <div key={message.id} className="grid gap-2">
+                        {showDate ? (
+                          <div className="my-2 justify-self-center rounded-full border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel-soft)_82%,transparent)] px-3 py-1 text-xs font-semibold text-[var(--muted)] backdrop-blur">
+                            {formatMessageDate(message.createdAt)}
+                          </div>
+                        ) : null}
+                        <div className={joinClasses("flex", own ? "justify-end" : "justify-start")}>
+                          <div
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              setContextMenu({ x: event.clientX, y: event.clientY, message });
+                            }}
+                            className={joinClasses(
+                              "max-w-[86%] cursor-context-menu rounded-[20px] shadow-[0_16px_28px_-24px_rgba(0,0,0,0.9)] sm:max-w-[66%]",
+                              mediaPaths.length
+                                ? "overflow-hidden p-0"
+                                : "border px-4 py-2.5",
+                              own
+                                ? mediaPaths.length
+                                  ? "rounded-br-md"
+                                  : "rounded-br-md border-[var(--accent)]/28 bg-[color:color-mix(in_srgb,var(--accent)_22%,var(--panel-soft))]"
+                                : mediaPaths.length
+                                  ? "rounded-bl-md"
+                                  : "rounded-bl-md border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel-soft)_92%,black)]",
+                              isMediaGroup ? "w-[min(420px,76vw)]" : "",
+                            )}
+                          >
+                            {!own ? (
+                              <div className="mb-0.5 text-xs font-semibold text-[var(--accent)]">{message.sender.name}</div>
+                            ) : null}
+                            {message.forwardedFrom ? (
+                              <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-[var(--accent)]">
+                                Переслано от {message.forwardedFrom.senderName}
+                              </div>
+                            ) : null}
+                            {message.replyTo ? (
+                              <div className="mb-2 rounded-[14px] border-l-2 border-[var(--accent)] bg-black/15 px-3 py-2 text-xs text-[var(--muted)]">
+                                <div className="font-semibold text-[var(--accent)]">{message.replyTo.senderName}</div>
+                                <div className="mt-1 line-clamp-2">
+                                  {message.replyTo.deleted
+                                    ? "Сообщение удалено"
+                                    : message.replyTo.content || getMessageMediaLabel(message.replyTo.imagePath) || "Сообщение"}
+                                </div>
+                              </div>
+                            ) : null}
+                            {message.deletedForAll ? (
+                              <p className="text-sm italic text-[var(--muted)]">Сообщение удалено</p>
+                            ) : isMediaGroup ? (
+                              <div className={joinClasses("grid gap-1 overflow-hidden rounded-[20px]", getMessageMediaGroupClass(mediaPaths.length))}>
+                                {mediaPaths.map((mediaPath) => (
+                                  <MessageMediaPreview
+                                    key={mediaPath}
+                                    src={mediaPath}
+                                    grouped
+                                    onOpen={() => {
+                                      const index = mediaItems.findIndex((item) => item.src === mediaPath);
+                                      setOpenMediaIndex(index >= 0 ? index : null);
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            ) : message.imagePath ? (
+                              <MessageMediaPreview
+                                src={message.imagePath}
+                                onOpen={() => {
+                                  const index = mediaItems.findIndex((item) => item.src === message.imagePath);
+                                  setOpenMediaIndex(index >= 0 ? index : null);
+                                }}
+                              />
+                            ) : null}
+                            {!message.deletedForAll && message.content ? (
+                              <p className={joinClasses("whitespace-pre-wrap break-words text-sm leading-6 text-[var(--text)]", message.imagePath ? "mt-2 px-3 pb-2" : "")}>
+                                {message.content}
+                              </p>
+                            ) : null}
+                            <div className={joinClasses("mt-0.5 flex justify-end gap-1 text-[11px] text-[var(--muted)]", mediaPaths.length ? "px-3 pb-2" : "")}>
+                              {message.editedAt && !message.deletedForAll ? <span>изменено</span> : null}
+                              <span>{formatRelativeDate(message.createdAt)}</span>
+                              {own ? <span className="text-[var(--accent)]">{message.readByRecipient ? "✓✓" : "✓"}</span> : null}
+                              {isMediaGroup ? <span>{mediaPaths.length} медиа</span> : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={scrollRef} />
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-[var(--line)] text-center text-sm text-[var(--muted)]">
+                  Диалог открыт. Напишите первое сообщение.
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={sendMessage} className="border-t border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_78%,black)] px-4 py-3 backdrop-blur">
+              <div className="mx-auto grid max-w-[980px] gap-2">
+                {replyTarget || editingMessage ? (
+                  <div className="flex items-start justify-between gap-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-xs text-[var(--muted)]">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-[var(--accent)]">
+                        {editingMessage ? "Изменение сообщения" : `Ответ ${replyTarget?.sender.name ?? ""}`}
+                      </div>
+                      <div className="mt-1 truncate">
+                        {(editingMessage ?? replyTarget)?.content ||
+                          getMessageMediaLabel((editingMessage ?? replyTarget)?.imagePath) ||
+                          "Сообщение"}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReplyTarget(null);
+                        setEditingMessage(null);
+                        if (editingMessage) {
+                          setMessageText("");
+                        }
+                      }}
+                      className="rounded-full px-2 py-1 hover:bg-white/[0.04] hover:text-[var(--text)]"
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                ) : null}
+                {messageFiles.length ? (
+                  <div className="rounded-[20px] border border-[var(--line)] bg-[var(--panel-soft)] p-2">
+                    <div className="mb-2 flex items-center justify-between gap-3 px-1 text-xs text-[var(--muted)]">
+                      <span>{messageFiles.length === 1 ? "Вложение к сообщению" : `Вложения: ${messageFiles.length}`}</span>
+                      <button
+                        type="button"
+                        onClick={() => setMessageFiles([])}
+                        className="rounded-full px-2 py-1 hover:bg-white/[0.04] hover:text-[var(--text)]"
+                      >
+                        Убрать
+                      </button>
+                    </div>
+                    <div className="flex max-h-[156px] gap-2 overflow-x-auto pb-1">
+                      {messageFilePreviews.map((preview) => {
+                        const isVideo = preview.type.startsWith("video/");
+                        const isPreviewableImage = preview.type.startsWith("image/") && preview.type !== "image/heic" && preview.type !== "image/heif";
+
+                        return (
+                          <div key={preview.url} className="relative h-32 w-32 shrink-0 overflow-hidden rounded-[16px] border border-[var(--line)] bg-black/30 sm:h-36 sm:w-36">
+                            {isVideo ? (
+                              <video src={preview.url} className="h-full w-full object-cover" muted />
+                            ) : isPreviewableImage ? (
+                              <img src={preview.url} alt={preview.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-[color:color-mix(in_srgb,var(--accent)_12%,black)] p-4 text-center text-xs font-semibold text-[var(--muted)]">
+                                Файл будет отправлен
+                              </div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 pb-2 pt-8">
+                              <div className="truncate text-[11px] font-semibold text-white/90">{preview.name}</div>
+                            </div>
+                            {isVideo ? (
+                              <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
+                                video
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex items-center gap-3">
+                  <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[var(--line)] text-[var(--muted)] transition hover:bg-white/[0.04] hover:text-[var(--text)]">
+                    <span className="sr-only">Прикрепить файл</span>
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                      <path d="m8.5 12.5 5.9-5.9a3 3 0 1 1 4.2 4.2l-7.4 7.4a5 5 0 0 1-7.1-7.1l7.8-7.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <input
+                      type="file"
+                      multiple
+                      disabled={Boolean(editingMessage)}
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime"
+                      onChange={(event) => setMessageFiles(Array.from(event.target.files ?? []))}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="min-w-0 flex-1">
+                    <span className="sr-only">Сообщение</span>
+                    <input
+                      type="text"
+                      maxLength={2000}
+                      value={messageText}
+                      onChange={(event) => updateMessageText(event.target.value)}
+                      placeholder={messageFiles.length ? "Подпись к файлам..." : "Сообщение..."}
+                      className="h-11 w-full rounded-full border border-[var(--line)] bg-[var(--panel-soft)] px-4 text-sm outline-none transition focus:border-[var(--accent)]/70"
+                    />
+                  </label>
+                <button
+                  type="submit"
+                  disabled={pendingMessage || (!messageText.trim() && !messageFiles.length)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--page)] shadow-[0_18px_34px_-18px_rgba(132,184,44,0.95)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Отправить сообщение"
+                >
+                  {pendingMessage ? (
+                    <span className="text-sm font-semibold">...</span>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                      <path d="M4.5 19.5 20 12 4.5 4.5l2 6.2L13 12l-6.5 1.3-2 6.2Z" fill="currentColor" />
+                    </svg>
+                  )}
+                </button>
+                </div>
+              </div>
+            </form>
+          </>
+        ) : (
+          <div className="flex flex-1 items-center justify-center p-6 text-center">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-[var(--text)]">Выберите диалог</h2>
+              <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+                Здесь будут личные сообщения один-на-один. Найдите пользователя или откройте существующий диалог.
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {error ? (
+        <div className="xl:col-span-2 rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+          {error}
+        </div>
+      ) : null}
+      {contextMenu ? (
+        <div
+          className="fixed z-[95] w-56 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm text-[var(--text)] shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]"
+          style={{
+            left: Math.min(contextMenu.x, window.innerWidth - 240),
+            top: Math.min(contextMenu.y, window.innerHeight - 300),
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <MessageContextButton onClick={() => startReply(contextMenu.message)} disabled={contextMenu.message.deletedForAll}>
+            Ответить
+          </MessageContextButton>
+          <MessageContextButton
+            onClick={() => {
+              setForwardingMessage(contextMenu.message);
+              setContextMenu(null);
+            }}
+            disabled={contextMenu.message.deletedForAll}
+          >
+            Переслать
+          </MessageContextButton>
+          <MessageContextButton
+            onClick={() => startEdit(contextMenu.message)}
+            disabled={
+              contextMenu.message.senderId !== viewerId ||
+              contextMenu.message.deletedForAll ||
+              Boolean(contextMenu.message.mediaPaths.length)
+            }
+          >
+            Изменить
+          </MessageContextButton>
+          <MessageContextButton
+            onClick={() => {
+              void copyMessageText(contextMenu.message);
+              setContextMenu(null);
+            }}
+            disabled={!contextMenu.message.content || contextMenu.message.deletedForAll}
+          >
+            Копировать текст
+          </MessageContextButton>
+          <div className="my-1 h-px bg-[var(--line)]" />
+          <MessageContextButton onClick={() => void deleteMessage(contextMenu.message, "me")}>
+            Удалить у меня
+          </MessageContextButton>
+          <MessageContextButton
+            danger
+            onClick={() => void deleteMessage(contextMenu.message, "all")}
+            disabled={contextMenu.message.senderId !== viewerId || contextMenu.message.deletedForAll}
+          >
+            Удалить у всех
+          </MessageContextButton>
+        </div>
+      ) : null}
+      {forwardingMessage ? (
+        <div className="fixed inset-0 z-[94] grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-[var(--line)] bg-[var(--panel)] p-5 shadow-[0_30px_90px_-36px_rgba(0,0,0,0.95)]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-[var(--text)]">Переслать сообщение</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">Выберите диалог, куда отправить копию сообщения.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForwardingMessage(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--muted)] hover:bg-white/[0.05] hover:text-[var(--text)]"
+                aria-label="Закрыть"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-4 grid max-h-[360px] gap-2 overflow-y-auto">
+              {conversations.length ? (
+                conversations.map((conversation) => (
+                  <button
+                    key={conversation.id}
+                    type="button"
+                    onClick={() => void forwardMessage(conversation.id)}
+                    className="flex items-center gap-3 rounded-[20px] bg-[var(--panel-soft)] p-3 text-left transition hover:bg-white/[0.04]"
+                  >
+                    <MessageAvatar user={conversation.participant} />
+                    <div className="min-w-0">
+                      <MessageAuthorLine user={conversation.participant} />
+                      <div className="mt-1 truncate text-xs text-[var(--muted)]">
+                        {conversation.lastMessage?.content ||
+                          getMessageMediaLabel(conversation.lastMessage?.imagePath) ||
+                          "Диалог создан"}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="rounded-[20px] border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
+                  Пока нет диалогов для пересылки.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <MessageMediaViewer
+        items={mediaItems}
+        currentIndex={openMediaIndex}
+        onNavigate={setOpenMediaIndex}
+        onClose={() => setOpenMediaIndex(null)}
+      />
+    </div>
+  );
+}
+
+function MessageContextButton({
+  children,
+  onClick,
+  disabled = false,
+  danger = false,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={joinClasses(
+        "flex w-full items-center rounded-[14px] px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40",
+        danger ? "text-rose-300 hover:bg-rose-500/10" : "hover:bg-white/[0.05]",
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 function playNotificationChime() {
@@ -1790,7 +3303,7 @@ export function DesktopSiteNotifications({
         <div className="fixed bottom-6 right-6 z-[90] hidden w-[320px] rounded-[24px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_94%,black_6%)] p-4 shadow-[0_24px_60px_-35px_rgba(0,0,0,0.9)] lg:block">
           <div className="text-sm font-semibold text-[var(--text)]">Уведомления на ПК</div>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Разрешите уведомления, и новые лайки, подписки и посты будут всплывать прямо на экране.
+            Разрешите уведомления, и новые сообщения, лайки, подписки и посты будут всплывать прямо на экране.
           </p>
           <div className="mt-4 flex justify-end">
             <button
@@ -1863,6 +3376,8 @@ export function PostComposer({
   const [error, setError] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [targetGroupSlug, setTargetGroupSlug] = useState(initialGroupSlug);
+  const [pollEnabled, setPollEnabled] = useState(false);
+  const [pollOptions, setPollOptions] = useState(["", ""]);
 
   return (
     <form
@@ -1881,13 +3396,15 @@ export function PostComposer({
             content: formData.get("content"),
             imagePath,
             pollQuestion: formData.get("pollQuestion"),
-            pollOptions: [formData.get("optionOne"), formData.get("optionTwo"), formData.get("optionThree")],
+            pollOptions: formData.getAll("pollOption"),
             groupSlug: targetGroupSlug,
           });
           setMessage(targetGroupSlug ? "Пост опубликован в клане." : "Пост опубликован.");
           setImageFile(null);
           form.reset();
           setTargetGroupSlug(initialGroupSlug);
+          setPollEnabled(false);
+          setPollOptions(["", ""]);
           window.dispatchEvent(new Event("feed:changed"));
           router.refresh();
         } catch (value) {
@@ -1935,10 +3452,19 @@ export function PostComposer({
               <span>{imageFile ? imageFile.name : "Фото"}</span>
               <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => setImageFile(event.target.files?.[0] || null)} className="hidden" />
             </label>
-            <label className="flex min-w-0 items-center gap-2 rounded-full border border-[var(--line)] px-3 py-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setPollEnabled((current) => !current)}
+              className={joinClasses(
+                "flex items-center gap-2 rounded-full border px-3 py-2 text-xs transition",
+                pollEnabled
+                  ? "border-[var(--accent)]/45 bg-[var(--accent)]/10 text-[var(--accent)]"
+                  : "border-[var(--line)] hover:bg-white/[0.04]",
+              )}
+            >
               <span>◌</span>
-              <input name="pollQuestion" placeholder="Вопрос опроса" className="w-28 bg-transparent outline-none placeholder:text-[var(--muted)] sm:w-40" />
-            </label>
+              <span>{pollEnabled ? "Опрос включён" : "Опрос"}</span>
+            </button>
           </div>
           <button type="submit" disabled={pending} className="w-full rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90 disabled:opacity-50 sm:w-auto">
             {pending ? "Публикуем..." : "Опубликовать"}
@@ -1946,11 +3472,52 @@ export function PostComposer({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <input name="optionOne" placeholder="Вариант 1" className={fieldClass} />
-        <input name="optionTwo" placeholder="Вариант 2" className={fieldClass} />
-        <input name="optionThree" placeholder="Вариант 3" className={fieldClass} />
-      </div>
+      {pollEnabled ? (
+        <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-[var(--text)]">Опрос</div>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Можно добавить от 2 до 6 вариантов ответа.</p>
+            </div>
+            <button
+              type="button"
+              disabled={pollOptions.length >= 6}
+              onClick={() => setPollOptions((current) => [...current, ""])}
+              className="rounded-full border border-[var(--line)] px-3 py-2 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Добавить вариант
+            </button>
+          </div>
+          <input name="pollQuestion" placeholder="Вопрос опроса" className={`${fieldClass} mt-4`} />
+          <div className="mt-3 grid gap-2">
+            {pollOptions.map((option, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  name="pollOption"
+                  value={option}
+                  onChange={(event) =>
+                    setPollOptions((current) =>
+                      current.map((entry, entryIndex) => (entryIndex === index ? event.target.value : entry)),
+                    )
+                  }
+                  placeholder={`Вариант ${index + 1}`}
+                  className={fieldClass}
+                />
+                {pollOptions.length > 2 ? (
+                  <button
+                    type="button"
+                    onClick={() => setPollOptions((current) => current.filter((_, entryIndex) => entryIndex !== index))}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                    aria-label="Удалить вариант"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
       {message ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}
@@ -1964,7 +3531,6 @@ export function ProfileEditor({ user }: { user: User }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [selectedEmoji, setSelectedEmoji] = useState(user.avatar.type === "emoji" ? user.avatar.value : "✨");
 
   return (
     <form
@@ -1983,7 +3549,6 @@ export function ProfileEditor({ user }: { user: User }) {
           await requestJson("/api/profile", {
             name: formData.get("name"),
             bio: formData.get("bio"),
-            avatarEmoji: selectedEmoji,
             coverImagePath,
             themePreference: user.themePreference,
           });
@@ -1997,15 +3562,22 @@ export function ProfileEditor({ user }: { user: User }) {
         }
       }}
     >
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
         <label className="grid gap-2 text-sm">
           <span className="text-[var(--muted)]">Имя</span>
           <input name="name" defaultValue={user.name} required placeholder="Ваше имя" className={fieldClass} />
         </label>
-        <label className="grid gap-2 text-sm">
+        <div className="grid gap-2 text-sm">
           <span className="text-[var(--muted)]">Эмодзи-аватар</span>
-          <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
-        </label>
+          <div className="flex items-center gap-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel)] text-xl">
+              {user.avatar.type === "emoji" ? user.avatar.value : "✨"}
+            </span>
+            <span className="text-xs leading-5 text-[var(--muted)]">
+              Эмодзи закрепляется при регистрации и не меняется в настройках профиля.
+            </span>
+          </div>
+        </div>
       </div>
 
       <label className="grid gap-2 text-sm">
@@ -2105,7 +3677,7 @@ export function ClanCreateForm() {
         <span className="text-[var(--muted)]">Обложка клана</span>
         <input
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif"
           onChange={(event) => setCoverFile(event.target.files?.[0] || null)}
           className="rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2.5 text-xs text-[var(--muted)] file:mr-2 file:rounded-lg file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[var(--page)]"
         />
@@ -2120,6 +3692,140 @@ export function ClanCreateForm() {
         </button>
       </div>
     </form>
+  );
+}
+
+export function ClanEditForm({ group }: { group: Group }) {
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [selectedEmoji, setSelectedEmoji] = useState(group.avatar.type === "emoji" ? group.avatar.value : "✨");
+
+  return (
+    <div className="mt-5">
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="rounded-full border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-2 text-sm font-semibold text-[var(--text)] hover:bg-white/[0.04]"
+      >
+        Редактировать клан
+      </button>
+
+      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Редактировать клан">
+        <form
+          className="grid gap-5"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setPending(true);
+            setMessage("");
+            setError("");
+            const form = event.currentTarget;
+            const formData = new FormData(form);
+
+            try {
+              const coverImagePath = coverFile ? await uploadFile(coverFile, "cover") : "";
+              const response = await requestJson<{ slug: string }>("/api/clans/update", {
+                currentSlug: group.slug,
+                name: formData.get("name"),
+                slug: formData.get("slug"),
+                description: formData.get("description"),
+                avatarEmoji: selectedEmoji,
+                coverImagePath,
+              });
+
+              setMessage("Клан обновлён.");
+              setCoverFile(null);
+              router.push(`/clan/${response.slug}`);
+              router.refresh();
+            } catch (value) {
+              setError(value instanceof Error ? value.message : "Не удалось обновить клан.");
+            } finally {
+              setPending(false);
+            }
+          }}
+        >
+          <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
+            <div className="flex items-start gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] border border-[var(--line)] bg-[var(--panel-strong)] text-3xl">
+                {selectedEmoji}
+              </div>
+              <div className="min-w-0">
+                <div className="text-base font-semibold text-[var(--text)]">{group.name}</div>
+                <div className="mt-1 text-sm text-[var(--muted)]">@{group.slug}</div>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                  Изменения названия, адреса, описания, эмодзи и обложки применяются после сохранения.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+            <div className="grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-2 text-sm">
+                  <span className="text-[var(--muted)]">Название</span>
+                  <input name="name" required minLength={3} maxLength={120} defaultValue={group.name} className={fieldClass} />
+                </label>
+                <label className="grid gap-2 text-sm">
+                  <span className="text-[var(--muted)]">Slug</span>
+                  <input name="slug" required minLength={3} maxLength={64} defaultValue={group.slug} className={fieldClass} />
+                </label>
+              </div>
+
+              <label className="grid gap-2 text-sm">
+                <span className="text-[var(--muted)]">Описание</span>
+                <textarea
+                  name="description"
+                  rows={5}
+                  required
+                  minLength={12}
+                  maxLength={1200}
+                  defaultValue={group.description}
+                  className={`${fieldClass} resize-none`}
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm">
+                <span className="text-[var(--muted)]">Новая обложка</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif"
+                  onChange={(event) => setCoverFile(event.target.files?.[0] || null)}
+                  className="rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-xs text-[var(--muted)] file:mr-2 file:rounded-lg file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[var(--page)]"
+                />
+                <span className="text-xs text-[var(--muted)]">
+                  {coverFile ? `Выбрано: ${coverFile.name}` : "Если файл не выбран, текущая обложка останется."}
+                </span>
+              </label>
+            </div>
+
+            <div className="grid gap-2 text-sm">
+              <span className="text-[var(--muted)]">Эмодзи клана</span>
+              <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
+            </div>
+          </div>
+
+          {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
+          {message ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-semibold text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+            >
+              Отмена
+            </button>
+            <button type="submit" disabled={pending} className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90 disabled:opacity-50">
+              {pending ? "Сохраняем..." : "Сохранить клан"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </div>
   );
 }
 
@@ -2228,7 +3934,7 @@ export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: b
   ] as const;
 
   return (
-    <div className="fixed bottom-6 right-8 z-30 hidden items-end gap-2 text-right xl:flex xl:flex-col">
+    <div className="app-footer fixed bottom-6 right-8 z-30 hidden items-end gap-2 text-right xl:flex xl:flex-col">
       <div className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-[var(--muted)]">
         {links.map((item, index) => (
           <div key={item.label} className="flex items-center gap-2">
@@ -2269,7 +3975,7 @@ export function ProfileSettingsModal({ user }: { user: User }) {
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)} className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--page)] hover:opacity-90">
+      <button type="button" onClick={() => setIsOpen(true)} className="whitespace-nowrap rounded-xl bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--page)] hover:opacity-90">
         Редактировать
       </button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Редактировать профиль">
@@ -2284,7 +3990,7 @@ export function VerificationModal({ status }: { status: VerificationStatus }) {
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)} className="rounded-xl border border-[var(--line)] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]">
+      <button type="button" onClick={() => setIsOpen(true)} className="whitespace-nowrap rounded-xl border border-[var(--line)] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]">
         Верификация
       </button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Верификация профиля">
@@ -2352,7 +4058,7 @@ export function SettingsModal({ user }: { user: User }) {
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)} className="rounded-xl border border-[var(--line)] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]">
+      <button type="button" onClick={() => setIsOpen(true)} className="whitespace-nowrap rounded-xl border border-[var(--line)] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]">
         Настройки
       </button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Настройки">

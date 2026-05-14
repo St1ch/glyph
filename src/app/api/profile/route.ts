@@ -5,7 +5,6 @@ import { getViewer, updateProfile } from "@/lib/data";
 const schema = z.object({
   name: z.string().trim().min(2),
   bio: z.string().trim().min(2),
-  avatarEmoji: z.string().default(""),
   coverImagePath: z.string().default(""),
   themePreference: z.enum(["light", "dark", "system"]),
 });

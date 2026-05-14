@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { PostComposer } from "@/components/client";
+import { ClanEditForm, PostComposer } from "@/components/client";
 import { AvatarBubble, ClanCard, EmptyState, PostCard, SectionCard } from "@/components/server";
 import { getClanData } from "@/lib/data";
 import { isHeicAssetUrl } from "@/lib/site";
@@ -54,6 +54,7 @@ export default async function ClanPage({ params }: ClanPageProps) {
 
   const { viewer, group, members, posts, viewerGroups } = data;
   const canPost = viewer ? group.memberIds.includes(viewer.id) : false;
+  const canEdit = viewer ? group.ownerId === viewer.id || viewer.isAdmin : false;
 
   return (
       <div className="flex w-full max-w-[760px] flex-col gap-6 px-4 py-6 min-[2400px]:max-w-[980px]">
@@ -88,6 +89,7 @@ export default async function ClanPage({ params }: ClanPageProps) {
             </div>
           </div>
           <p className="mt-5 max-w-3xl text-sm leading-7 text-[var(--muted)]">{group.description}</p>
+          {canEdit ? <ClanEditForm group={group} /> : null}
           <div className="mt-5 text-sm text-[var(--muted)]">{group.memberIds.length} участников</div>
         </div>
       </section>

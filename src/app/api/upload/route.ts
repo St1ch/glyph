@@ -1,21 +1,34 @@
 import { NextResponse } from "next/server";
-import { imageTypes, uploadLimits, verificationVideoTypes } from "@/lib/site";
+import { imageTypes, uploadLimits, verificationVideoTypes, videoTypes } from "@/lib/site";
 import { saveUpload } from "@/lib/data";
 
 export const runtime = "nodejs";
 
-function isAllowed(kind: string, file: File) {
+type UploadKind = keyof typeof uploadLimits;
+
+function isAllowed(kind: UploadKind, file: File) {
   if (kind === "verification") {
     return verificationVideoTypes.includes(file.type as (typeof verificationVideoTypes)[number]);
+  }
+
+  if (kind === "message") {
+    return (
+      imageTypes.includes(file.type as (typeof imageTypes)[number]) ||
+      videoTypes.includes(file.type as (typeof videoTypes)[number])
+    );
   }
 
   return imageTypes.includes(file.type as (typeof imageTypes)[number]);
 }
 
-function getUploadError(kind: string, type: "format" | "size") {
+function getUploadError(kind: UploadKind, type: "format" | "size") {
   if (type === "format") {
     if (kind === "verification") {
       return "Поддерживаются только видео MP4, WebM или MOV.";
+    }
+
+    if (kind === "message") {
+      return "Поддерживаются изображения JPG, PNG, WEBP, GIF, HEIC, HEIF и видео MP4, WebM, MOV.";
     }
 
     return "Поддерживаются изображения JPG, PNG, WEBP, GIF, HEIC и HEIF.";
@@ -33,7 +46,15 @@ function getUploadError(kind: string, type: "format" | "size") {
     return "Изображение слишком большое. Максимальный размер для обложки — 8 МБ.";
   }
 
+  if (kind === "message") {
+    return "Файл слишком большой. Максимальный размер вложения в сообщении — 50 МБ.";
+  }
+
   return "Изображение слишком большое. Максимальный размер — 8 МБ.";
+}
+
+function isUploadKind(value: string): value is UploadKind {
+  return ["avatar", "cover", "post", "message", "verification"].includes(value);
 }
 
 export async function POST(request: Request) {
@@ -46,7 +67,7 @@ export async function POST(request: Request) {
       throw new Error("Файл не найден.");
     }
 
-    if (!["avatar", "cover", "post", "verification"].includes(kind)) {
+    if (!isUploadKind(kind)) {
       throw new Error("Неизвестный тип загрузки.");
     }
 
@@ -54,7 +75,7 @@ export async function POST(request: Request) {
       throw new Error(getUploadError(kind, "format"));
     }
 
-    const maxSize = uploadLimits[kind as keyof typeof uploadLimits];
+    const maxSize = uploadLimits[kind];
 
     if (file.size > maxSize) {
       throw new Error(getUploadError(kind, "size"));

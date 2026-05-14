@@ -106,6 +106,103 @@ body::-webkit-scrollbar-thumb {
   border-radius: 999px;
 }
 
+body:has(.messages-page) {
+  overflow: hidden;
+}
+
+body:has(.messages-page) .app-shell {
+  max-width: none;
+  height: 100vh;
+  margin-inline: 0;
+  gap: 0;
+  padding-inline: 0;
+}
+
+body:has(.messages-page) .app-sidebar {
+  position: static;
+  height: 100vh;
+  width: 260px;
+  padding: 1rem;
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--page) 84%, transparent);
+}
+
+body:has(.messages-page) .app-main {
+  min-height: 0;
+  height: 100vh;
+}
+
+body:has(.messages-page) .app-content {
+  height: 100%;
+  padding: 0;
+}
+
+body:has(.messages-page) .app-footer {
+  display: none;
+}
+
+body:has(.messages-page) .app-mobile-header {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  body:has(.messages-page) .app-main {
+    height: calc(100vh - 5rem);
+  }
+
+  body:has(.messages-page) .app-content {
+    padding-bottom: 0;
+  }
+
+  .messages-page {
+    height: 100%;
+    padding-bottom: 0;
+  }
+
+  .message-chat-surface {
+    min-height: 0;
+  }
+}
+
+.message-chat-surface {
+  position: relative;
+  background:
+    radial-gradient(circle at 72% 82%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 34%),
+    radial-gradient(circle at 20% 16%, rgba(113, 73, 145, 0.15), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.018) 25%, transparent 25%) 0 0 / 42px 42px,
+    linear-gradient(225deg, rgba(255, 255, 255, 0.018) 25%, transparent 25%) 0 0 / 42px 42px,
+    var(--panel);
+}
+
+.message-chat-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+.message-chat-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.22;
+  background-image:
+    radial-gradient(circle, color-mix(in srgb, var(--accent) 46%, transparent) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.22) 1px, transparent 1.4px);
+  background-position:
+    0 0,
+    18px 22px;
+  background-size:
+    72px 72px,
+    88px 88px;
+  mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 88%, transparent 100%);
+}
+
+@media (min-width: 2400px) {
+  body:has(.messages-page) .app-sidebar {
+    width: 300px;
+  }
+}
+
 a,
 button,
 input,

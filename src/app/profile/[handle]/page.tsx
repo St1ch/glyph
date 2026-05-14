@@ -98,6 +98,12 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
                   <VerificationBadge status={user.verificationStatus} />
+                  {user.isOnline ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/14 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
+                      <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.9)]" />
+                      В сети
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-0.5 text-sm text-white/78">@{user.handle}</div>
               </div>
@@ -105,13 +111,21 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
 
             {viewer ? (
               isOwn ? (
-                <div className="flex flex-wrap gap-2 rounded-[22px] bg-black/22 p-1.5 backdrop-blur-[2px] md:justify-end">
+                <div className="flex w-full flex-wrap gap-2 rounded-[22px] bg-black/22 p-1.5 backdrop-blur-[2px] sm:w-auto sm:flex-nowrap md:justify-end">
                   <ProfileSettingsModal user={user} />
                   <VerificationModal status={user.verificationStatus} />
                   <SettingsModal user={user} />
                 </div>
               ) : (
-                <FollowButton handle={user.handle} isFollowing={isFollowing} />
+                <div className="flex flex-wrap gap-2">
+                  <FollowButton handle={user.handle} isFollowing={isFollowing} />
+                  <Link
+                    href={`/messages?q=${user.handle}`}
+                    className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                  >
+                    Сообщение
+                  </Link>
+                </div>
               )
             ) : (
               <Link

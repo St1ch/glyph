@@ -8,7 +8,7 @@ export const siteConfig = {
     { href: "/", label: "Лента", icon: "feed" },
     { href: "/search", label: "Поиск", icon: "search" },
     { href: "/notifications", label: "Уведомления", icon: "bell" },
-    { href: "/messages", label: "Сообщения · скоро", icon: "message" },
+    { href: "/messages", label: "Сообщения", icon: "message" },
   ],
 } as const;
 
@@ -16,13 +16,18 @@ export const uploadLimits = {
   avatar: 5 * 1024 * 1024,
   cover: 8 * 1024 * 1024,
   post: 8 * 1024 * 1024,
+  message: 50 * 1024 * 1024,
   verification: 50 * 1024 * 1024,
 } as const;
 
-export const verificationVideoTypes = [
+export const videoTypes = [
   "video/mp4",
   "video/webm",
   "video/quicktime",
+] as const;
+
+export const verificationVideoTypes = [
+  ...videoTypes,
 ] as const;
 
 export const adminHandles = ["cloud-dev"] as const;
