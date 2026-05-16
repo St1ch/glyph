@@ -2267,11 +2267,11 @@ export function MessagesPanel({
   const [replyTarget, setReplyTarget] = useState<DirectMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<DirectMessage | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<DirectMessage | null>(null);
-  const [listMenuOpen, setListMenuOpen] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatMessageSearch, setChatMessageSearch] = useState("");
   const lastTypingSentAtRef = useRef(0);
+  const chatMenuRef = useRef<HTMLDivElement | null>(null);
   const mediaItems = useMemo(
     () =>
       messages.flatMap((message) =>
@@ -2416,6 +2416,24 @@ export function MessagesPanel({
       window.removeEventListener("scroll", close, true);
     };
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!chatMenuOpen) {
+      return;
+    }
+
+    const close = (event: MouseEvent) => {
+      if (chatMenuRef.current && event.target instanceof Node && !chatMenuRef.current.contains(event.target)) {
+        setChatMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", close);
+
+    return () => {
+      window.removeEventListener("mousedown", close);
+    };
+  }, [chatMenuOpen]);
 
   const updateMessageText = (value: string) => {
     setMessageText(value);
@@ -2582,16 +2600,6 @@ export function MessagesPanel({
       >
         <form action="/messages" className="relative flex min-h-[72px] items-center border-b border-[var(--line)] p-4">
           <div className="flex w-full items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setListMenuOpen((value) => !value)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--line)] text-[var(--muted)] transition hover:bg-white/[0.04] hover:text-[var(--text)]"
-              aria-label="Меню сообщений"
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </button>
             <label className="min-w-0 flex-1">
               <span className="sr-only">Найти собеседника</span>
               <input
@@ -2609,27 +2617,6 @@ export function MessagesPanel({
               Найти
             </button>
           </div>
-          {listMenuOpen ? (
-            <div className="absolute left-4 top-[62px] z-30 w-64 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]">
-              <Link href="/messages" className="block rounded-[14px] px-3 py-2.5 text-[var(--text)] hover:bg-white/[0.05]" onClick={() => setListMenuOpen(false)}>
-                Все диалоги
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  const input = document.querySelector<HTMLInputElement>('input[name="q"]');
-                  input?.focus();
-                  setListMenuOpen(false);
-                }}
-                className="block w-full rounded-[14px] px-3 py-2.5 text-left text-[var(--text)] hover:bg-white/[0.05]"
-              >
-                Найти пользователя
-              </button>
-              <Link href="/search" className="block rounded-[14px] px-3 py-2.5 text-[var(--muted)] hover:bg-white/[0.05] hover:text-[var(--text)]" onClick={() => setListMenuOpen(false)}>
-                Общий поиск GLYPH
-              </Link>
-            </div>
-          ) : null}
         </form>
 
         {candidates.length ? (
@@ -2704,8 +2691,34 @@ export function MessagesPanel({
       >
         {activeConversation ? (
           <>
-            <div className="flex min-h-[72px] items-center justify-between gap-3 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_92%,black)] px-4 py-3">
-              <div className="flex min-w-0 items-center gap-3">
+            <div className="message-chat-header relative flex min-h-[72px] items-center justify-between gap-3 overflow-visible border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_92%,black)] px-4 py-3">
+              {chatSearchOpen ? (
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <label className="min-w-0 flex-1">
+                    <span className="sr-only">Поиск по сообщениям</span>
+                    <input
+                      type="search"
+                      value={chatMessageSearch}
+                      onChange={(event) => setChatMessageSearch(event.target.value)}
+                      autoFocus
+                      placeholder="Найти сообщение..."
+                      className="h-11 w-full rounded-full border border-[var(--accent)]/55 bg-[var(--panel-soft)] px-4 text-sm outline-none shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)] transition"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChatMessageSearch("");
+                      setChatSearchOpen(false);
+                    }}
+                    className="h-11 rounded-full border border-[var(--line)] px-4 text-sm font-semibold text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                  >
+                    Закрыть
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex min-w-0 items-center gap-3">
                 <Link
                   href="/messages"
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--muted)] hover:bg-white/[0.05] hover:text-[var(--text)] lg:hidden"
@@ -2722,8 +2735,8 @@ export function MessagesPanel({
                     {typingConversationId === activeConversation.id ? "печатает..." : formatPresence(activeConversation.participant)}
                   </div>
                 </div>
-              </div>
-              <div className="relative flex items-center gap-1 text-[var(--muted)]">
+                  </div>
+                  <div ref={chatMenuRef} className="relative z-[90] flex items-center gap-1 text-[var(--muted)]">
                 <button
                   type="button"
                   onClick={() => {
@@ -2751,7 +2764,7 @@ export function MessagesPanel({
                   </svg>
                 </button>
                 {chatMenuOpen ? (
-                  <div className="absolute right-0 top-11 z-[120] w-60 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]">
+                  <div className="absolute right-0 top-11 z-[1000] w-60 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]">
                     <Link
                       href={`/profile/${activeConversation.participant.handle}`}
                       className="block rounded-[14px] px-3 py-2.5 text-[var(--text)] hover:bg-white/[0.05]"
@@ -2778,35 +2791,10 @@ export function MessagesPanel({
                     </Link>
                   </div>
                 ) : null}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
-            {chatSearchOpen ? (
-              <div className="border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_88%,black)] px-4 py-3">
-                <div className="mx-auto flex max-w-[980px] items-center gap-2">
-                  <label className="min-w-0 flex-1">
-                    <span className="sr-only">Поиск по сообщениям</span>
-                    <input
-                      type="search"
-                      value={chatMessageSearch}
-                      onChange={(event) => setChatMessageSearch(event.target.value)}
-                      autoFocus
-                      placeholder="Найти сообщение..."
-                      className="h-10 w-full rounded-full border border-[var(--line)] bg-[var(--panel-soft)] px-4 text-sm outline-none transition focus:border-[var(--accent)]/70"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setChatMessageSearch("");
-                      setChatSearchOpen(false);
-                    }}
-                    className="h-10 rounded-full border border-[var(--line)] px-4 text-sm font-semibold text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
-                  >
-                    Закрыть
-                  </button>
-                </div>
-              </div>
-            ) : null}
 
             <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8">
               {visibleMessages.length ? (
@@ -3048,7 +3036,7 @@ export function MessagesPanel({
       ) : null}
       {contextMenu ? (
         <div
-          className="fixed z-[95] w-56 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm text-[var(--text)] shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]"
+          className="fixed z-[999] w-56 overflow-hidden rounded-[18px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black)] p-1 text-sm text-[var(--text)] shadow-[0_24px_70px_-32px_rgba(0,0,0,0.95)]"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 240),
             top: Math.min(contextMenu.y, window.innerHeight - 300),
@@ -3470,54 +3458,54 @@ export function PostComposer({
             {pending ? "Публикуем..." : "Опубликовать"}
           </button>
         </div>
-      </div>
 
-      {pollEnabled ? (
-        <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel)] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-[var(--text)]">Опрос</div>
-              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Можно добавить от 2 до 6 вариантов ответа.</p>
-            </div>
-            <button
-              type="button"
-              disabled={pollOptions.length >= 6}
-              onClick={() => setPollOptions((current) => [...current, ""])}
-              className="rounded-full border border-[var(--line)] px-3 py-2 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              Добавить вариант
-            </button>
-          </div>
-          <input name="pollQuestion" placeholder="Вопрос опроса" className={`${fieldClass} mt-4`} />
-          <div className="mt-3 grid gap-2">
-            {pollOptions.map((option, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  name="pollOption"
-                  value={option}
-                  onChange={(event) =>
-                    setPollOptions((current) =>
-                      current.map((entry, entryIndex) => (entryIndex === index ? event.target.value : entry)),
-                    )
-                  }
-                  placeholder={`Вариант ${index + 1}`}
-                  className={fieldClass}
-                />
-                {pollOptions.length > 2 ? (
-                  <button
-                    type="button"
-                    onClick={() => setPollOptions((current) => current.filter((_, entryIndex) => entryIndex !== index))}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
-                    aria-label="Удалить вариант"
-                  >
-                    ×
-                  </button>
-                ) : null}
+        {pollEnabled ? (
+          <div className="mt-4 rounded-[22px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_72%,transparent)] p-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-[var(--text)]">Опрос в посте</div>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Вопрос и варианты будут прикреплены к этой публикации.</p>
               </div>
-            ))}
+              <button
+                type="button"
+                disabled={pollOptions.length >= 6}
+                onClick={() => setPollOptions((current) => [...current, ""])}
+                className="rounded-full border border-[var(--line)] px-3 py-2 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Добавить вариант
+              </button>
+            </div>
+            <input name="pollQuestion" placeholder="Вопрос опроса" className={fieldClass} />
+            <div className="mt-3 grid gap-2">
+              {pollOptions.map((option, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    name="pollOption"
+                    value={option}
+                    onChange={(event) =>
+                      setPollOptions((current) =>
+                        current.map((entry, entryIndex) => (entryIndex === index ? event.target.value : entry)),
+                      )
+                    }
+                    placeholder={`Вариант ${index + 1}`}
+                    className={fieldClass}
+                  />
+                  {pollOptions.length > 2 ? (
+                    <button
+                      type="button"
+                      onClick={() => setPollOptions((current) => current.filter((_, entryIndex) => entryIndex !== index))}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                      aria-label="Удалить вариант"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
       {message ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}

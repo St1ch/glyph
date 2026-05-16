@@ -179,6 +179,10 @@ body:has(.messages-page) .app-mobile-header {
   z-index: 1;
 }
 
+.message-chat-surface > .message-chat-header {
+  z-index: 80;
+}
+
 .message-chat-surface::before {
   content: "";
   position: absolute;
