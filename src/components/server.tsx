@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { DecoratedPost, Group, Notification, User } from "@/lib/types";
 import { formatRelativeDate, formatters, isHeicAssetUrl, joinClasses } from "@/lib/site";
 import { CommentsPanel, FollowButton, JoinClanButton, LikeButton, PostActionsMenu, PostImageViewer, PostOpenFrame, RepostButton, VoteButtons } from "@/components/client";
+import { GlyphMark, isGlyphValue } from "@/components/glyph-mark";
 
 type Viewer = User | null;
 
@@ -118,6 +119,20 @@ export function AvatarBubble({
           "rounded-3xl border border-[var(--line)] object-cover shadow-sm",
         )}
       />
+    );
+  }
+
+  if (isGlyphValue(avatar.value)) {
+    return (
+      <div
+        className={joinClasses(
+          sizeClass,
+          "flex items-center justify-center overflow-hidden rounded-full border border-[var(--line)] bg-[var(--panel-strong)] shadow-sm",
+        )}
+        aria-label={name}
+      >
+        <GlyphMark value={avatar.value} size={sizePixels} />
+      </div>
     );
   }
 

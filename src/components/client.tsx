@@ -7,7 +7,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import type { AdminPostReport, DecoratedPost, DecoratedPostComment, DirectMessage, Group, MessageConversation, MessageUserSummary, ThemePreference, User, VerificationStatus } from "@/lib/types";
 import { formatRelativeDate, imageTypes, isHeicAssetUrl, joinClasses, uploadLimits, verificationVideoTypes, videoTypes } from "@/lib/site";
-import { EmojiPicker } from "@/components/emoji-picker";
+import { defaultClanGlyph, defaultUserGlyph, GlyphMark, GlyphMarkPicker, glyphLabel, isGlyphValue } from "@/components/glyph-mark";
 export { MobileNavBar } from "@/components/mobile-nav-bar";
 
 type RequestError = {
@@ -20,9 +20,26 @@ type LiveNotificationItem = {
   id: string;
   title: string;
   description: string;
-  link: string;
+  link?: string;
   createdAt: string;
 };
+
+function emitLocalToast(title: string, description: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("glyph:toast", {
+      detail: {
+        id: window.crypto?.randomUUID?.() || `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        title,
+        description,
+        createdAt: new Date().toISOString(),
+      } satisfies LiveNotificationItem,
+    }),
+  );
+}
 
 type RealtimeIncomingEvent =
   | {
@@ -1041,6 +1058,14 @@ function CommentAvatar({ user }: { user: DecoratedPostComment["author"] }) {
     );
   }
 
+  if (isGlyphValue(user.avatar.value)) {
+    return (
+      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[var(--line)] bg-[var(--panel-strong)]">
+        <GlyphMark value={user.avatar.value} size={40} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] text-lg">
       {user.avatar.value}
@@ -1341,7 +1366,7 @@ export function AuthForm({
   const [error, setError] = useState(initialError);
   const [success, setSuccess] = useState("");
   const [previewLink, setPreviewLink] = useState("");
-  const [selectedEmoji, setSelectedEmoji] = useState("✨");
+  const [selectedGlyph, setSelectedGlyph] = useState(defaultUserGlyph);
 
   const title = mode === "login" ? "Вход в GLYPH" : "Регистрация в GLYPH";
 
@@ -1373,7 +1398,7 @@ export function AuthForm({
                 handle: formData.get("handle"),
                 email: formData.get("email"),
                 password: formData.get("password"),
-                avatarEmoji: selectedEmoji,
+                avatarEmoji: selectedGlyph,
               };
 
         try {
@@ -1418,10 +1443,10 @@ export function AuthForm({
             <input name="email" type="email" required placeholder="you@example.com" className={fieldClass} />
           </label>
           <label className="grid gap-2 text-sm">
-            <span className="text-[var(--muted)]">Эмодзи-аватар</span>
-            <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
+            <span className="text-[var(--muted)]">Личный знак</span>
+            <GlyphMarkPicker value={selectedGlyph} onSelect={setSelectedGlyph} />
             <span className="text-xs text-orange-400/80">
-              Эмодзи выбирается только при регистрации. Подумайте, какой знак будет вашим образом в GLYPH.
+              Знак выбирается при регистрации и становится вашим образом в GLYPH. Лучше выбрать обдуманно.
             </span>
           </label>
         </>
@@ -1517,114 +1542,6 @@ export function PasswordResetForm({ token }: { token: string }) {
         {pending ? "Сохраняем..." : "Сохранить новый пароль"}
       </button>
     </form>
-  );
-}
-
-export function BetaWelcomeModal({
-  viewerId,
-  viewerName,
-}: {
-  viewerId: string;
-  viewerName: string;
-}) {
-  const isClient = useSyncExternalStore(
-    () => () => undefined,
-    () => true,
-    () => false,
-  );
-  const [dismissed, setDismissed] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const open = () => {
-      setManualOpen(true);
-      setDismissed(false);
-    };
-
-    window.addEventListener("glyph:open-beta-welcome", open);
-
-    return () => {
-      window.removeEventListener("glyph:open-beta-welcome", open);
-    };
-  }, []);
-
-  const isOpen =
-    manualOpen ||
-    (
-      isClient &&
-      !dismissed &&
-      window.localStorage.getItem(`glyph-beta-welcome:${viewerId}`) !== "seen"
-    );
-
-  if (!isOpen) {
-    return null;
-  }
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => {
-        window.localStorage.setItem(`glyph-beta-welcome:${viewerId}`, "seen");
-        setDismissed(true);
-        setManualOpen(false);
-      }}
-      title="Добро пожаловать в beta"
-    >
-      <div className="grid gap-5">
-        <div className="relative overflow-hidden rounded-[28px] border border-[var(--line)] bg-[linear-gradient(140deg,rgba(132,184,44,0.2),rgba(255,255,255,0.03)_32%,rgba(255,255,255,0.01)_100%)] p-5 shadow-[0_24px_60px_-45px_rgba(0,0,0,0.9)]">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(132,184,44,0.24),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.08),transparent_26%)]" />
-          <div className="relative grid gap-4">
-            <div className="inline-flex w-fit rounded-full border border-[var(--line)] bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
-              GLYPH beta
-            </div>
-            <div className="grid gap-2">
-              <h3 className="text-2xl font-semibold tracking-tight text-[var(--text)]">
-                Спасибо, {viewerName}, что помогаешь развивать проект
-              </h3>
-              <p className="max-w-2xl text-sm leading-7 text-[var(--muted)]">
-                Сейчас ты участвуешь в бета-тесте GLYPH. Если заметишь баг, странное поведение интерфейса или просто захочешь предложить улучшение, напиши мне в Telegram: <span className="font-semibold text-[var(--accent)]">@ISt1chl</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
-            <div className="text-sm font-semibold text-[var(--text)]">Что важно знать</div>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Проект активно дорабатывается, поэтому отдельные детали интерфейса и поведения ещё могут меняться.
-            </p>
-          </div>
-          <div className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
-            <div className="text-sm font-semibold text-[var(--text)]">Личные сообщения</div>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-              Этот раздел пока находится на стадии размышления и проектирования, поэтому может отсутствовать или выглядеть незавершённо.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-xs leading-6 text-[var(--muted)]">
-            Твоё участие помогает сделать GLYPH стабильнее и понятнее перед следующими обновлениями.
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              window.localStorage.setItem(`glyph-beta-welcome:${viewerId}`, "seen");
-              setDismissed(true);
-              setManualOpen(false);
-            }}
-            className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90"
-          >
-            Понятно, поехали
-          </button>
-        </div>
-      </div>
-    </Modal>
   );
 }
 
@@ -1816,6 +1733,17 @@ function MessageAvatar({ user }: { user: MessageUserSummary }) {
           height={44}
           className="h-11 w-11 rounded-full border border-[var(--line)] object-cover"
         />
+        {statusDot}
+      </div>
+    );
+  }
+
+  if (isGlyphValue(user.avatar.value)) {
+    return (
+      <div className="relative h-11 w-11 shrink-0">
+        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-[var(--line)] bg-[var(--panel-strong)]">
+          <GlyphMark value={user.avatar.value} size={44} />
+        </div>
         {statusDot}
       </div>
     );
@@ -3232,7 +3160,7 @@ export function DesktopSiteNotifications({
   const permission = permissionOverride ?? (isClient ? getDesktopNotificationPermission() : "denied");
 
   useEffect(() => {
-    if (!enabled || typeof window === "undefined" || !window.matchMedia("(min-width: 1024px)").matches) {
+    if (!enabled || typeof window === "undefined") {
       return;
     }
 
@@ -3254,13 +3182,30 @@ export function DesktopSiteNotifications({
         });
         notification.onclick = () => {
           window.focus();
-          window.location.href = item.link;
+          if (item.link) {
+            window.location.href = item.link;
+          }
         };
       }
     };
 
+    const onToast = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<LiveNotificationItem>;
+      const item = event.detail;
+
+      if (!item?.id) {
+        return;
+      }
+
+      setToasts((current) => [...current, item].slice(-4));
+    };
+
     window.addEventListener("glyph:notification", onNotification as EventListener);
-    return () => window.removeEventListener("glyph:notification", onNotification as EventListener);
+    window.addEventListener("glyph:toast", onToast as EventListener);
+    return () => {
+      window.removeEventListener("glyph:notification", onNotification as EventListener);
+      window.removeEventListener("glyph:toast", onToast as EventListener);
+    };
   }, [enabled, isClient, viewerId]);
 
   useEffect(() => {
@@ -3271,7 +3216,7 @@ export function DesktopSiteNotifications({
     const timers = toasts.map((toast, index) =>
       window.setTimeout(() => {
         setToasts((current) => current.filter((item) => item.id !== toast.id));
-      }, 5200 + index * 350),
+      }, 8500 + index * 450),
     );
 
     return () => {
@@ -3318,30 +3263,51 @@ export function DesktopSiteNotifications({
       ) : null}
 
       {toasts.length ? (
-        <div className="fixed bottom-6 right-6 z-[95] hidden w-[360px] gap-3 lg:grid">
+        <div className="fixed bottom-4 left-4 right-4 z-[95] grid gap-3 sm:left-auto sm:right-6 sm:w-[360px]">
           {toasts.map((toast) => (
-            <Link
-              key={toast.id}
-              href={toast.link}
-              className="rounded-[22px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black_4%)] p-4 shadow-[0_24px_60px_-35px_rgba(0,0,0,0.9)]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[var(--text)]">{toast.title}</div>
-                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{toast.description}</p>
+            toast.link ? (
+              <Link
+                key={toast.id}
+                href={toast.link}
+                className="rounded-[22px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black_4%)] p-4 shadow-[0_24px_60px_-35px_rgba(0,0,0,0.9)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-[var(--text)]">{toast.title}</div>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{toast.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setToasts((current) => current.filter((item) => item.id !== toast.id));
+                    }}
+                    className="rounded-full px-2 py-1 text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                  >
+                    ×
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setToasts((current) => current.filter((item) => item.id !== toast.id));
-                  }}
-                  className="rounded-full px-2 py-1 text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
-                >
-                  ×
-                </button>
+              </Link>
+            ) : (
+              <div
+                key={toast.id}
+                className="rounded-[22px] border border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_96%,black_4%)] p-4 shadow-[0_24px_60px_-35px_rgba(0,0,0,0.9)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-[var(--text)]">{toast.title}</div>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{toast.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}
+                    className="rounded-full px-2 py-1 text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
-            </Link>
+            )
           ))}
         </div>
       ) : null}
@@ -3360,7 +3326,6 @@ export function PostComposer({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [targetGroupSlug, setTargetGroupSlug] = useState(initialGroupSlug);
@@ -3373,7 +3338,6 @@ export function PostComposer({
       onSubmit={async (event) => {
         event.preventDefault();
         setPending(true);
-        setMessage("");
         setError("");
         const form = event.currentTarget;
         const formData = new FormData(form);
@@ -3383,11 +3347,14 @@ export function PostComposer({
           await requestJson("/api/posts", {
             content: formData.get("content"),
             imagePath,
-            pollQuestion: formData.get("pollQuestion"),
-            pollOptions: formData.getAll("pollOption"),
+            pollQuestion: pollEnabled ? String(formData.get("pollQuestion") || "") : "",
+            pollOptions: pollEnabled ? formData.getAll("pollOption").map((option) => String(option || "")) : [],
             groupSlug: targetGroupSlug,
           });
-          setMessage(targetGroupSlug ? "Пост опубликован в клане." : "Пост опубликован.");
+          emitLocalToast(
+            "Пост опубликован",
+            targetGroupSlug ? "Запись добавлена в ленту клана." : "Запись добавлена в ленту.",
+          );
           setImageFile(null);
           form.reset();
           setTargetGroupSlug(initialGroupSlug);
@@ -3505,18 +3472,16 @@ export function PostComposer({
             </div>
           </div>
         ) : null}
-      </div>
+        </div>
 
-      {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
-      {message ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}
-    </form>
-  );
+        {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
+      </form>
+    );
 }
 
-export function ProfileEditor({ user }: { user: User }) {
+export function ProfileEditor({ user, onSuccess }: { user: User; onSuccess?: () => void }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
 
@@ -3526,7 +3491,6 @@ export function ProfileEditor({ user }: { user: User }) {
       onSubmit={async (event) => {
         event.preventDefault();
         setPending(true);
-        setMessage("");
         setError("");
         const form = event.currentTarget;
         const formData = new FormData(form);
@@ -3541,8 +3505,9 @@ export function ProfileEditor({ user }: { user: User }) {
             themePreference: user.themePreference,
           });
 
-          setMessage("Профиль обновлён.");
+          emitLocalToast("Профиль обновлён", "Изменения сохранены.");
           router.refresh();
+          onSuccess?.();
         } catch (value) {
           setError(value instanceof Error ? value.message : "Не удалось обновить профиль.");
         } finally {
@@ -3556,14 +3521,21 @@ export function ProfileEditor({ user }: { user: User }) {
           <input name="name" defaultValue={user.name} required placeholder="Ваше имя" className={fieldClass} />
         </label>
         <div className="grid gap-2 text-sm">
-          <span className="text-[var(--muted)]">Эмодзи-аватар</span>
+          <span className="text-[var(--muted)]">Личный знак</span>
           <div className="flex items-center gap-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel)] text-xl">
-              {user.avatar.type === "emoji" ? user.avatar.value : "✨"}
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--panel)] text-xl">
+              {user.avatar.type === "emoji" && isGlyphValue(user.avatar.value) ? (
+                <GlyphMark value={user.avatar.value} size={50} inset={2} />
+              ) : (
+                user.avatar.type === "emoji" ? user.avatar.value : "✨"
+              )}
             </span>
-            <span className="text-xs leading-5 text-[var(--muted)]">
-              Эмодзи закрепляется при регистрации и не меняется в настройках профиля.
-            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-[var(--text)]">Знак профиля</div>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                Знак закрепляется при регистрации. В лабораторной версии он заменяет эмодзи-аватар.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -3578,10 +3550,9 @@ export function ProfileEditor({ user }: { user: User }) {
           <span className="text-[var(--muted)]">Обложка профиля</span>
           <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => setCoverFile(event.target.files?.[0] || null)} className="rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2.5 text-xs text-[var(--muted)] file:mr-2 file:rounded-lg file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[var(--page)]" />
         </label>
-      </div>
+        </div>
 
       {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
-      {message ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}
 
       <div className="flex justify-end">
         <button type="submit" disabled={pending} className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90 disabled:opacity-50">
@@ -3595,10 +3566,9 @@ export function ProfileEditor({ user }: { user: User }) {
 export function ClanCreateForm() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [selectedEmoji, setSelectedEmoji] = useState("✨");
+  const [selectedGlyph, setSelectedGlyph] = useState(defaultClanGlyph);
 
   return (
     <form
@@ -3606,7 +3576,6 @@ export function ClanCreateForm() {
       onSubmit={async (event) => {
         event.preventDefault();
         setPending(true);
-        setMessage("");
         setError("");
         const form = event.currentTarget;
         const formData = new FormData(form);
@@ -3617,11 +3586,11 @@ export function ClanCreateForm() {
             name: formData.get("name"),
             slug: formData.get("slug"),
             description: formData.get("description"),
-            avatarEmoji: selectedEmoji,
+            avatarEmoji: selectedGlyph,
             coverImagePath,
           });
 
-          setMessage("Клан создан.");
+          emitLocalToast("Клан создан", "Глиф зафиксирован при создании и больше не меняется.");
           router.push(`/clan/${response.slug}`);
           router.refresh();
         } catch (value) {
@@ -3643,8 +3612,11 @@ export function ClanCreateForm() {
           </label>
         </div>
         <label className="grid gap-2 text-sm">
-          <span className="text-[var(--muted)]">Эмодзи-аватар</span>
-          <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
+          <span className="text-[var(--muted)]">Глиф клана</span>
+          <GlyphMarkPicker value={selectedGlyph} onSelect={setSelectedGlyph} compact />
+          <span className="text-xs text-[var(--muted)]">
+            Глиф выбирается один раз при создании клана и потом не редактируется.
+          </span>
         </label>
       </div>
 
@@ -3672,7 +3644,6 @@ export function ClanCreateForm() {
       </label>
 
       {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
-      {message ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}
 
       <div className="flex justify-end">
         <button type="submit" disabled={pending} className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[var(--page)] hover:opacity-90 disabled:opacity-50">
@@ -3687,10 +3658,9 @@ export function ClanEditForm({ group }: { group: Group }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [selectedEmoji, setSelectedEmoji] = useState(group.avatar.type === "emoji" ? group.avatar.value : "✨");
+  const currentGlyph = group.avatar.type === "emoji" && isGlyphValue(group.avatar.value) ? group.avatar.value : defaultClanGlyph;
 
   return (
     <div className="mt-5">
@@ -3708,7 +3678,6 @@ export function ClanEditForm({ group }: { group: Group }) {
           onSubmit={async (event) => {
             event.preventDefault();
             setPending(true);
-            setMessage("");
             setError("");
             const form = event.currentTarget;
             const formData = new FormData(form);
@@ -3720,12 +3689,12 @@ export function ClanEditForm({ group }: { group: Group }) {
                 name: formData.get("name"),
                 slug: formData.get("slug"),
                 description: formData.get("description"),
-                avatarEmoji: selectedEmoji,
                 coverImagePath,
               });
 
-              setMessage("Клан обновлён.");
+              emitLocalToast("Клан обновлён", "Изменения сохранены.");
               setCoverFile(null);
+              setIsOpen(false);
               router.push(`/clan/${response.slug}`);
               router.refresh();
             } catch (value) {
@@ -3737,15 +3706,16 @@ export function ClanEditForm({ group }: { group: Group }) {
         >
           <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
             <div className="flex items-start gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] border border-[var(--line)] bg-[var(--panel-strong)] text-3xl">
-                {selectedEmoji}
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--panel-strong)]">
+                <GlyphMark value={currentGlyph} size={64} />
               </div>
               <div className="min-w-0">
                 <div className="text-base font-semibold text-[var(--text)]">{group.name}</div>
                 <div className="mt-1 text-sm text-[var(--muted)]">@{group.slug}</div>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                  Изменения названия, адреса, описания, эмодзи и обложки применяются после сохранения.
+                  Изменения названия, адреса, описания и обложки применяются после сохранения. Глиф задаётся только один раз при создании.
                 </p>
+                <div className="mt-2 text-xs text-[var(--accent)]">{glyphLabel(currentGlyph)}</div>
               </div>
             </div>
           </div>
@@ -3791,13 +3761,24 @@ export function ClanEditForm({ group }: { group: Group }) {
             </div>
 
             <div className="grid gap-2 text-sm">
-              <span className="text-[var(--muted)]">Эмодзи клана</span>
-              <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
+              <span className="text-[var(--muted)]">Глиф клана</span>
+              <div className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-[var(--line)] bg-[var(--panel-strong)]">
+                    <GlyphMark value={currentGlyph} size={56} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-[var(--text)]">{glyphLabel(currentGlyph)}</div>
+                    <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                      Этот знак уже закреплён за кланом и не редактируется.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           {error ? <div className="rounded-[18px] border border-rose-500/18 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
-          {message ? <div className="rounded-[18px] border border-emerald-500/18 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}
 
           <div className="flex flex-wrap justify-end gap-2">
             <button
@@ -3913,7 +3894,7 @@ function Modal({ isOpen, onClose, title, children }: { isOpen: boolean; onClose:
   );
 }
 
-export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: boolean }) {
+export function SidebarFooter() {
   const links = [
     { href: "/", label: "Главная" },
     { href: "/search", label: "Поиск" },
@@ -3941,15 +3922,6 @@ export function SidebarFooter({ canOpenBetaInfo = false }: { canOpenBetaInfo?: b
         ))}
       </div>
       <div className="flex items-center justify-end gap-3 text-[10px] leading-5">
-        {canOpenBetaInfo ? (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event("glyph:open-beta-welcome"))}
-            className="rounded-full border border-[color:color-mix(in_srgb,var(--accent)_55%,var(--line))] bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] px-3 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[color:color-mix(in_srgb,var(--accent)_18%,transparent)]"
-          >
-            Бета-инфо
-          </button>
-        ) : null}
         <div className="text-[color:color-mix(in_srgb,var(--muted)_86%,transparent)]">
           © 2026 GLYPH
         </div>
@@ -3967,7 +3939,7 @@ export function ProfileSettingsModal({ user }: { user: User }) {
         Редактировать
       </button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Редактировать профиль">
-        <ProfileEditor user={user} />
+        <ProfileEditor user={user} onSuccess={() => setIsOpen(false)} />
       </Modal>
     </>
   );

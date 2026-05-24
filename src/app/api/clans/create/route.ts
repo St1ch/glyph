@@ -6,7 +6,7 @@ const schema = z.object({
   name: z.string().trim().min(3).max(120),
   slug: z.string().trim().max(64).optional().default(""),
   description: z.string().trim().min(12).max(1200),
-  avatarEmoji: z.string().trim().min(1).max(16),
+  avatarEmoji: z.string().trim().min(1).max(80),
   coverImagePath: z.string().trim().optional().default(""),
 });
 

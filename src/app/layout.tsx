@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Handjet } from "next/font/google";
 import Link from "next/link";
 import {
-  BetaWelcomeModal,
   CookieNotice,
   DesktopSiteNotifications,
   MobileNavBar,
@@ -93,7 +92,6 @@ export default async function RootLayout({
         <script id="glyph-theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} suppressHydrationWarning />
         {viewer ? <RealtimeBridge viewerId={viewer.id} /> : null}
         {viewer ? <DesktopSiteNotifications viewerId={viewer.id} enabled={viewer.notificationsEnabled} /> : null}
-        {viewer ? <BetaWelcomeModal viewerId={viewer.id} viewerName={viewer.name} /> : null}
 
         <header className="app-mobile-header fixed inset-x-0 top-0 z-40 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
           <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-4 py-3 min-[2400px]:max-w-[1360px]">
@@ -170,7 +168,7 @@ export default async function RootLayout({
           </main>
         </div>
 
-        <SidebarFooter canOpenBetaInfo={Boolean(viewer)} />
+        <SidebarFooter />
         <CookieNotice />
         <MobileNavBar
           items={siteConfig.navigation}

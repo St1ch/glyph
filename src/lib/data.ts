@@ -104,7 +104,6 @@ type UpdateClanInput = {
   name: string;
   slug: string;
   description: string;
-  avatarEmoji: string;
   coverImagePath: string;
 };
 
@@ -2824,7 +2823,6 @@ export async function updateClan(input: UpdateClanInput) {
   const normalizedName = input.name.trim();
   const normalizedDescription = input.description.trim();
   const normalizedSlug = slugify(input.slug || input.name);
-  const normalizedEmoji = input.avatarEmoji.trim() || "✨";
   const normalizedCoverImage = input.coverImagePath.trim();
 
   if (normalizedName.length < 3) {
@@ -2866,13 +2864,12 @@ export async function updateClan(input: UpdateClanInput) {
     await txExecute(
       connection,
       `UPDATE groups_clans
-       SET slug = ?, name = ?, description = ?, avatar_type = 'emoji', avatar_value = ?, cover_image = COALESCE(?, cover_image)
+       SET slug = ?, name = ?, description = ?, cover_image = COALESCE(?, cover_image)
        WHERE id = ?`,
       [
         normalizedSlug,
         normalizedName,
         normalizedDescription,
-        normalizedEmoji,
         normalizedCoverImage || null,
         group.id,
       ],

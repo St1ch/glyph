@@ -7,7 +7,6 @@ const schema = z.object({
   name: z.string().trim().min(3).max(120),
   slug: z.string().trim().min(3).max(64),
   description: z.string().trim().min(12).max(1200),
-  avatarEmoji: z.string().trim().min(1).max(16),
   coverImagePath: z.string().trim().optional().default(""),
 });
 
@@ -26,7 +25,6 @@ export async function POST(request: Request) {
       name: payload.name,
       slug: payload.slug,
       description: payload.description,
-      avatarEmoji: payload.avatarEmoji,
       coverImagePath: payload.coverImagePath,
     });
 
