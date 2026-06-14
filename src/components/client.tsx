@@ -3873,7 +3873,7 @@ export function SidebarFooter() {
   const links = [
     { href: "/", label: "Главная" },
     { href: "/search", label: "Поиск" },
-    { href: "https://t.me/ISt1chl", label: "Telegram" },
+    { href: "https://t.me/Cl0udDev", label: "Telegram" },
     { href: "https://github.com/St1ch/glyph", label: "GitHub" },
   ] as const;
 
