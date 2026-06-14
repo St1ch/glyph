@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type FormEvent, type ReactNode } from "react";
@@ -7,7 +7,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import type { AdminPostReport, DecoratedPost, DecoratedPostComment, DirectMessage, Group, MessageConversation, MessageUserSummary, ThemePreference, User, VerificationStatus } from "@/lib/types";
 import { formatRelativeDate, imageTypes, isHeicAssetUrl, joinClasses, uploadLimits, verificationVideoTypes, videoTypes } from "@/lib/site";
-import { defaultClanGlyph, defaultUserGlyph, GlyphMark, GlyphMarkPicker, glyphLabel, isGlyphValue } from "@/components/glyph-mark";
+import { EmojiPicker } from "@/components/emoji-picker";
 export { MobileNavBar } from "@/components/mobile-nav-bar";
 
 type RequestError = {
@@ -1058,14 +1058,6 @@ function CommentAvatar({ user }: { user: DecoratedPostComment["author"] }) {
     );
   }
 
-  if (isGlyphValue(user.avatar.value)) {
-    return (
-      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[var(--line)] bg-[var(--panel-strong)]">
-        <GlyphMark value={user.avatar.value} size={40} />
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] text-lg">
       {user.avatar.value}
@@ -1366,7 +1358,7 @@ export function AuthForm({
   const [error, setError] = useState(initialError);
   const [success, setSuccess] = useState("");
   const [previewLink, setPreviewLink] = useState("");
-  const [selectedGlyph, setSelectedGlyph] = useState(defaultUserGlyph);
+  const [selectedEmoji, setSelectedEmoji] = useState("✨");
 
   const title = mode === "login" ? "Вход в GLYPH" : "Регистрация в GLYPH";
 
@@ -1398,7 +1390,7 @@ export function AuthForm({
                 handle: formData.get("handle"),
                 email: formData.get("email"),
                 password: formData.get("password"),
-                avatarEmoji: selectedGlyph,
+                avatarEmoji: selectedEmoji,
               };
 
         try {
@@ -1443,10 +1435,10 @@ export function AuthForm({
             <input name="email" type="email" required placeholder="you@example.com" className={fieldClass} />
           </label>
           <label className="grid gap-2 text-sm">
-            <span className="text-[var(--muted)]">Личный знак</span>
-            <GlyphMarkPicker value={selectedGlyph} onSelect={setSelectedGlyph} />
+            <span className="text-[var(--muted)]">Эмодзи-аватар</span>
+            <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
             <span className="text-xs text-orange-400/80">
-              Знак выбирается при регистрации и становится вашим образом в GLYPH. Лучше выбрать обдуманно.
+              Эмодзи выбирается при регистрации и становится вашим аватаром в GLYPH. Лучше выбрать обдуманно.
             </span>
           </label>
         </>
@@ -1733,17 +1725,6 @@ function MessageAvatar({ user }: { user: MessageUserSummary }) {
           height={44}
           className="h-11 w-11 rounded-full border border-[var(--line)] object-cover"
         />
-        {statusDot}
-      </div>
-    );
-  }
-
-  if (isGlyphValue(user.avatar.value)) {
-    return (
-      <div className="relative h-11 w-11 shrink-0">
-        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-[var(--line)] bg-[var(--panel-strong)]">
-          <GlyphMark value={user.avatar.value} size={44} />
-        </div>
         {statusDot}
       </div>
     );
@@ -3521,19 +3502,15 @@ export function ProfileEditor({ user, onSuccess }: { user: User; onSuccess?: () 
           <input name="name" defaultValue={user.name} required placeholder="Ваше имя" className={fieldClass} />
         </label>
         <div className="grid gap-2 text-sm">
-          <span className="text-[var(--muted)]">Личный знак</span>
+          <span className="text-[var(--muted)]">Эмодзи-аватар</span>
           <div className="flex items-center gap-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-3">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--panel)] text-xl">
-              {user.avatar.type === "emoji" && isGlyphValue(user.avatar.value) ? (
-                <GlyphMark value={user.avatar.value} size={50} inset={2} />
-              ) : (
-                user.avatar.type === "emoji" ? user.avatar.value : "✨"
-              )}
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--panel)] text-3xl">
+              {user.avatar.type === "emoji" ? user.avatar.value : "✨"}
             </span>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-[var(--text)]">Знак профиля</div>
+              <div className="text-sm font-semibold text-[var(--text)]">Аватар профиля</div>
               <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                Знак закрепляется при регистрации. В лабораторной версии он заменяет эмодзи-аватар.
+                Эмодзи закрепляется при регистрации и не редактируется.
               </p>
             </div>
           </div>
@@ -3568,7 +3545,7 @@ export function ClanCreateForm() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [selectedGlyph, setSelectedGlyph] = useState(defaultClanGlyph);
+  const [selectedEmoji, setSelectedEmoji] = useState("✨");
 
   return (
     <form
@@ -3586,7 +3563,7 @@ export function ClanCreateForm() {
             name: formData.get("name"),
             slug: formData.get("slug"),
             description: formData.get("description"),
-            avatarEmoji: selectedGlyph,
+            avatarEmoji: selectedEmoji,
             coverImagePath,
           });
 
@@ -3612,10 +3589,10 @@ export function ClanCreateForm() {
           </label>
         </div>
         <label className="grid gap-2 text-sm">
-          <span className="text-[var(--muted)]">Глиф клана</span>
-          <GlyphMarkPicker value={selectedGlyph} onSelect={setSelectedGlyph} compact />
+          <span className="text-[var(--muted)]">Эмодзи клана</span>
+          <EmojiPicker onSelect={setSelectedEmoji} currentEmoji={selectedEmoji} />
           <span className="text-xs text-[var(--muted)]">
-            Глиф выбирается один раз при создании клана и потом не редактируется.
+            Эмодзи выбирается один раз при создании клана и потом не редактируется.
           </span>
         </label>
       </div>
@@ -3660,7 +3637,7 @@ export function ClanEditForm({ group }: { group: Group }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
-  const currentGlyph = group.avatar.type === "emoji" && isGlyphValue(group.avatar.value) ? group.avatar.value : defaultClanGlyph;
+  const currentEmoji = group.avatar.type === "emoji" ? group.avatar.value : "✨";
 
   return (
     <div className="mt-5">
@@ -3706,16 +3683,15 @@ export function ClanEditForm({ group }: { group: Group }) {
         >
           <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
             <div className="flex items-start gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--panel-strong)]">
-                <GlyphMark value={currentGlyph} size={64} />
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--panel-strong)] text-4xl">
+                {currentEmoji}
               </div>
               <div className="min-w-0">
                 <div className="text-base font-semibold text-[var(--text)]">{group.name}</div>
                 <div className="mt-1 text-sm text-[var(--muted)]">@{group.slug}</div>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                  Изменения названия, адреса, описания и обложки применяются после сохранения. Глиф задаётся только один раз при создании.
+                  Изменения названия, адреса, описания и обложки применяются после сохранения. Эмодзи задаётся только один раз при создании.
                 </p>
-                <div className="mt-2 text-xs text-[var(--accent)]">{glyphLabel(currentGlyph)}</div>
               </div>
             </div>
           </div>
@@ -3761,16 +3737,15 @@ export function ClanEditForm({ group }: { group: Group }) {
             </div>
 
             <div className="grid gap-2 text-sm">
-              <span className="text-[var(--muted)]">Глиф клана</span>
+              <span className="text-[var(--muted)]">Эмодзи клана</span>
               <div className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-[var(--line)] bg-[var(--panel-strong)]">
-                    <GlyphMark value={currentGlyph} size={56} />
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-[var(--line)] bg-[var(--panel-strong)] text-3xl">
+                    {currentEmoji}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-[var(--text)]">{glyphLabel(currentGlyph)}</div>
                     <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                      Этот знак уже закреплён за кланом и не редактируется.
+                      Этот эмодзи уже закреплён за кланом и не редактируется.
                     </p>
                   </div>
                 </div>
