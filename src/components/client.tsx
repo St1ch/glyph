@@ -1579,6 +1579,7 @@ export function RealtimeBridge({ viewerId }: { viewerId: string }) {
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let closedByEffect = false;
+    let connected = false;
     let refreshTimer: number | null = null;
     let presenceTimer: number | null = null;
 
@@ -1614,6 +1615,10 @@ export function RealtimeBridge({ viewerId }: { viewerId: string }) {
         }
 
         socket = new WebSocket(data.url);
+
+        socket.onopen = () => {
+          connected = true;
+        };
 
         socket.onmessage = (message) => {
           const event = JSON.parse(message.data) as RealtimeIncomingEvent;
@@ -1662,7 +1667,7 @@ export function RealtimeBridge({ viewerId }: { viewerId: string }) {
         socket.onclose = () => {
           socket = null;
 
-          if (!closedByEffect) {
+          if (!closedByEffect && connected) {
             reconnectTimer = window.setTimeout(() => {
               void connect();
             }, 1800);

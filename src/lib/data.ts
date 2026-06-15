@@ -316,6 +316,10 @@ async function hasPostReportReasonColumn() {
   return postReportsReasonColumnPromise;
 }
 
+function getPostReportCategoryExpression(hasReasonColumn: boolean) {
+  return hasReasonColumn ? "reason" : "category";
+}
+
 function toIso(value: Date | string | null) {
   if (!value) {
     return null;
@@ -653,6 +657,8 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
   const postIds = allPosts.map((post) => post.id);
   const postPlaceholders = placeholders(postIds);
   const hasReportDetails = await hasPostReportDetailsColumn();
+  const hasReportReason = await hasPostReportReasonColumn();
+  const reportCategoryExpression = getPostReportCategoryExpression(hasReportReason);
 
   const [likes, polls, options, comments, reportRows] = await Promise.all([
     queryRows<LikeRow>(`SELECT post_id, user_id FROM post_likes WHERE post_id IN (${postPlaceholders})`, postIds),
@@ -672,7 +678,7 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
       postIds,
     ),
     queryRows<PostReportRow>(
-      `SELECT id, post_id, reporter_user_id, COALESCE(reason, category) AS category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
+      `SELECT id, post_id, reporter_user_id, ${reportCategoryExpression} AS category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
        FROM post_reports
        WHERE post_id IN (${postPlaceholders})`,
       postIds,
@@ -1705,7 +1711,7 @@ export async function getAdminData(search = "") {
   assertAdmin(viewer);
   const hasReportDetails = await hasPostReportDetailsColumn();
   const hasReportReason = await hasPostReportReasonColumn();
-  const reportCategoryColumn = hasReportReason ? "reason" : "category";
+  const reportCategoryColumn = getPostReportCategoryExpression(hasReportReason);
 
   const [requestRows, reportRows, recentPosts] = await Promise.all([
     queryRows<VerificationRequestRow>(
