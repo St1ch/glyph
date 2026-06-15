@@ -260,6 +260,7 @@ type PostReportRow = RowDataPacket & {
   post_id: string;
   reporter_user_id: string;
   category: PostReportCategory;
+  reason?: PostReportCategory;
   details: string | null;
   status: PostReport["status"];
   created_at: Date | string;
@@ -281,6 +282,7 @@ type CountRow = RowDataPacket & {
 };
 
 let postReportsDetailsColumnPromise: Promise<boolean> | null = null;
+let postReportsReasonColumnPromise: Promise<boolean> | null = null;
 
 async function hasPostReportDetailsColumn() {
   if (!postReportsDetailsColumnPromise) {
@@ -296,6 +298,22 @@ async function hasPostReportDetailsColumn() {
   }
 
   return postReportsDetailsColumnPromise;
+}
+
+async function hasPostReportReasonColumn() {
+  if (!postReportsReasonColumnPromise) {
+    postReportsReasonColumnPromise = queryOne<CountRow>(
+      `SELECT COUNT(*) AS count
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'post_reports'
+         AND COLUMN_NAME = 'reason'`,
+    )
+      .then((row) => Number(row?.count ?? 0) > 0)
+      .catch(() => false);
+  }
+
+  return postReportsReasonColumnPromise;
 }
 
 function toIso(value: Date | string | null) {
@@ -468,11 +486,13 @@ function mapVerificationRequest(row: VerificationRequestRow): VerificationReques
 }
 
 function mapPostReport(row: PostReportRow): PostReport {
+  const category = row.reason ?? row.category;
+
   return {
     id: row.id,
     postId: row.post_id,
     reporterUserId: row.reporter_user_id,
-    category: (row as PostReportRow & { reason?: PostReportCategory }).reason ?? row.category,
+    category,
     details: row.details,
     status: row.status,
     createdAt: toIso(row.created_at)!,
@@ -1684,13 +1704,15 @@ export async function getAdminData(search = "") {
   const viewer = await getViewer();
   assertAdmin(viewer);
   const hasReportDetails = await hasPostReportDetailsColumn();
+  const hasReportReason = await hasPostReportReasonColumn();
+  const reportCategoryColumn = hasReportReason ? "reason" : "category";
 
   const [requestRows, reportRows, recentPosts] = await Promise.all([
     queryRows<VerificationRequestRow>(
       `SELECT * FROM verification_requests ORDER BY submitted_at DESC`,
     ),
     queryRows<PostReportRow>(
-      `SELECT id, post_id, reporter_user_id, COALESCE(reason, category) AS category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
+      `SELECT id, post_id, reporter_user_id, ${reportCategoryColumn} AS category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
        FROM post_reports ORDER BY
          CASE status
            WHEN 'open' THEN 0
@@ -2261,6 +2283,7 @@ export async function reportPost(
   details: string | null = null,
 ) {
   const hasReportDetails = await hasPostReportDetailsColumn();
+  const hasReportReason = await hasPostReportReasonColumn();
 
   return withTransaction(async (connection) => {
     const [post, reporter] = await Promise.all([
@@ -2285,9 +2308,13 @@ export async function reportPost(
     if (existing) {
       await txExecute(
         connection,
-        hasReportDetails
-          ? `UPDATE post_reports SET reason = ?, details = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`
-          : `UPDATE post_reports SET reason = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`,
+        hasReportReason
+          ? hasReportDetails
+            ? `UPDATE post_reports SET reason = ?, details = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`
+            : `UPDATE post_reports SET reason = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`
+          : hasReportDetails
+            ? `UPDATE post_reports SET category = ?, details = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`
+            : `UPDATE post_reports SET category = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`,
         hasReportDetails
           ? [reason, details, new Date(), existing.id]
           : [reason, new Date(), existing.id],
@@ -2299,11 +2326,17 @@ export async function reportPost(
     const reportId = randomUUID();
     await txExecute(
       connection,
-      hasReportDetails
-        ? `INSERT INTO post_reports (id, post_id, reporter_user_id, reason, details, status, created_at, reviewed_at)
-           VALUES (?, ?, ?, ?, ?, 'open', ?, NULL)`
-        : `INSERT INTO post_reports (id, post_id, reporter_user_id, reason, status, created_at, reviewed_at)
-           VALUES (?, ?, ?, ?, 'open', ?, NULL)`,
+      hasReportReason
+        ? hasReportDetails
+          ? `INSERT INTO post_reports (id, post_id, reporter_user_id, reason, details, status, created_at, reviewed_at)
+             VALUES (?, ?, ?, ?, ?, 'open', ?, NULL)`
+          : `INSERT INTO post_reports (id, post_id, reporter_user_id, reason, status, created_at, reviewed_at)
+             VALUES (?, ?, ?, ?, 'open', ?, NULL)`
+        : hasReportDetails
+          ? `INSERT INTO post_reports (id, post_id, reporter_user_id, category, details, status, created_at, reviewed_at)
+             VALUES (?, ?, ?, ?, ?, 'open', ?, NULL)`
+          : `INSERT INTO post_reports (id, post_id, reporter_user_id, category, status, created_at, reviewed_at)
+             VALUES (?, ?, ?, ?, 'open', ?, NULL)`,
       hasReportDetails
         ? [reportId, postId, reporterUserId, reason, details, new Date()]
         : [reportId, postId, reporterUserId, reason, new Date()],
