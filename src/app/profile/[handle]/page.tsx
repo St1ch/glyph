@@ -111,7 +111,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
 
             {viewer ? (
               isOwn ? (
-                <div className="flex w-full flex-wrap gap-2 rounded-[22px] bg-black/22 p-1.5 backdrop-blur-[2px] sm:w-auto sm:flex-nowrap md:justify-end">
+                <div className="grid w-full grid-cols-3 gap-2 rounded-[22px] bg-black/22 p-1.5 backdrop-blur-[2px] [&>button]:flex [&>button]:w-full [&>button]:items-center [&>button]:justify-center [&>button]:text-center sm:w-auto md:justify-end">
                   <ProfileSettingsModal user={user} />
                   <VerificationModal status={user.verificationStatus} />
                   <SettingsModal user={user} />

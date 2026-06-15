@@ -740,11 +740,13 @@ export function PostActionsMenu({
   disabledReport?: boolean;
 }) {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [reportReason, setReportReason] = useState("spam");
   const reportCategories = [
     { value: "spam", label: "Спам" },
     { value: "abuse", label: "Оскорбления" },
@@ -773,6 +775,7 @@ export function PostActionsMenu({
     typeof window === "undefined"
       ? `/post/${postId}`
       : `${window.location.origin}/post/${postId}`;
+  const isAdminPage = pathname.startsWith("/admin");
 
   const copyPostLink = async () => {
     try {
@@ -808,14 +811,39 @@ export function PostActionsMenu({
             </button>
             <button
               type="button"
-              disabled={disabledReport}
+              disabled={isAdminPage ? pending : disabledReport}
               onClick={() => {
+                if (isAdminPage) {
+                  const confirmed = window.confirm("Удалить этот пост? Это действие нельзя отменить.");
+
+                  if (!confirmed) {
+                    return;
+                  }
+
+                  setPending(true);
+
+                  requestJson("/api/admin/posts/delete", { postId })
+                    .then(() => {
+                      setIsOpen(false);
+                      window.dispatchEvent(new Event("feed:changed"));
+                      window.location.reload();
+                    })
+                    .catch((value) => {
+                      window.alert(value instanceof Error ? value.message : "Не удалось удалить пост.");
+                    })
+                    .finally(() => {
+                      setPending(false);
+                    });
+
+                  return;
+                }
+
                 setIsOpen(false);
                 setIsReportOpen(true);
               }}
               className="rounded-[14px] px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {disabledReport ? "Войдите, чтобы пожаловаться" : "Пожаловаться"}
+              {isAdminPage ? (pending ? "Удаляем..." : "Удалить пост") : disabledReport ? "Войдите, чтобы пожаловаться" : "Пожаловаться"}
             </button>
           </div>
         ) : null}
@@ -829,13 +857,14 @@ export function PostActionsMenu({
             setPending(true);
             setError("");
             const formData = new FormData(event.currentTarget);
+            const payload = {
+              postId,
+              reason: reportReason,
+              details: String(formData.get("details") || ""),
+            };
 
             try {
-              await requestJson("/api/posts/report", {
-                postId,
-                category: String(formData.get("category") || "other"),
-                details: String(formData.get("details") || ""),
-              });
+              await requestJson("/api/posts/report", payload);
               setIsReportOpen(false);
             } catch (value) {
               setError(value instanceof Error ? value.message : "Не удалось отправить жалобу.");
@@ -847,7 +876,7 @@ export function PostActionsMenu({
           <fieldset className="grid gap-2 text-sm">
             <legend className="text-[var(--muted)]">Выберите категорию жалобы</legend>
             <div className="grid gap-2">
-              {reportCategories.map((category, index) => (
+              {reportCategories.map((category) => (
                 <label
                   key={category.value}
                   className="flex cursor-pointer items-center gap-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-3 text-sm hover:bg-white/[0.04]"
@@ -856,7 +885,8 @@ export function PostActionsMenu({
                     type="radio"
                     name="category"
                     value={category.value}
-                    defaultChecked={index === 0}
+                    checked={reportReason === category.value}
+                    onChange={() => setReportReason(category.value)}
                   />
                   <span>{category.label}</span>
                 </label>
@@ -4322,5 +4352,77 @@ export function RevokeVerificationButton({
     >
       {pending ? "..." : "Отозвать"}
     </button>
+  );
+}
+
+type FeedTab = {
+  key: string;
+  label: string;
+  href: string;
+};
+
+export function FeedTabs({
+  tabs,
+  activeView,
+}: {
+  tabs: readonly FeedTab[];
+  activeView: string;
+}) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    let lastY = window.scrollY;
+    let ticking = false;
+
+    const update = () => {
+      const currentY = window.scrollY;
+      const delta = currentY - lastY;
+
+      if (currentY < 24 || delta < 0) {
+        setVisible(true);
+      } else if (delta > 6) {
+        setVisible(false);
+      }
+
+      lastY = currentY;
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(update);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <div
+      className={joinClasses(
+        "sticky top-16 z-30 mb-6 -mx-2 px-2 pb-3 pt-1 backdrop-blur lg:top-4 transition-transform duration-200 will-change-transform",
+        visible ? "translate-y-0" : "-translate-y-[calc(100%+0.75rem)]",
+      )}
+    >
+      <div className="flex justify-center rounded-[30px] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] py-2">
+        <div className="grid w-full max-w-[520px] grid-cols-1 gap-2 rounded-[26px] border border-[var(--line)] bg-[var(--panel-strong)] p-2 shadow-[0_16px_36px_-26px_rgba(0,0,0,0.85)] sm:grid-cols-3 sm:gap-1 sm:rounded-full">
+          {tabs.map((tab) => (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              className={joinClasses(
+                "rounded-full px-4 py-3 text-center text-sm font-medium transition",
+                activeView === tab.key
+                  ? "bg-white/[0.08] text-[var(--text)]"
+                  : "text-[var(--muted)] hover:bg-white/[0.03] hover:text-[var(--text)]",
+              )}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

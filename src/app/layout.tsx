@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Handjet } from "next/font/google";
 import Link from "next/link";
+import Script from "next/script";
 import {
   CookieNotice,
   DesktopSiteNotifications,
@@ -89,7 +90,7 @@ export default async function RootLayout({
       className={`${handjet.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-[var(--page)] font-[var(--font-handjet)] text-[var(--text)]">
-        <script id="glyph-theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} suppressHydrationWarning />
+        <Script id="glyph-theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
         {viewer ? <RealtimeBridge viewerId={viewer.id} /> : null}
         {viewer ? <DesktopSiteNotifications viewerId={viewer.id} enabled={viewer.notificationsEnabled} /> : null}
 

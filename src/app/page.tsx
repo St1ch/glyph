@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PostComposer } from "@/components/client";
+import { FeedTabs, PostComposer } from "@/components/client";
 import { EmptyState, PostCard, SectionCard } from "@/components/server";
 import { getAppData } from "@/lib/data";
-import { joinClasses } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -66,26 +65,7 @@ export default async function Home({ searchParams }: HomeProps) {
   return (
     <div className="flex justify-center">
       <div className="w-full max-w-[760px] px-4 min-[2400px]:max-w-[980px]">
-        <div className="sticky top-16 z-30 mb-6 -mx-2 px-2 pb-3 pt-1 backdrop-blur lg:top-4">
-          <div className="flex justify-center rounded-[30px] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] py-2">
-            <div className="grid w-full max-w-[520px] grid-cols-1 gap-2 rounded-[26px] border border-[var(--line)] bg-[var(--panel-strong)] p-2 shadow-[0_16px_36px_-26px_rgba(0,0,0,0.85)] sm:grid-cols-3 sm:gap-1 sm:rounded-full">
-              {tabs.map((tab) => (
-                <Link
-                  key={tab.key}
-                  href={tab.href}
-                  className={joinClasses(
-                    "rounded-full px-4 py-3 text-center text-sm font-medium transition",
-                    view === tab.key
-                      ? "bg-white/[0.08] text-[var(--text)]"
-                      : "text-[var(--muted)] hover:bg-white/[0.03] hover:text-[var(--text)]",
-                  )}
-                >
-                  {tab.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
+        <FeedTabs tabs={tabs} activeView={view} />
 
         <div className="mb-6">
           {viewer ? (

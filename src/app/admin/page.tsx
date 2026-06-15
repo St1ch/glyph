@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  AdminDeletePostButton,
   ReportReviewButtons,
   RevokeVerificationButton,
   VerificationReviewButtons,
@@ -42,7 +41,7 @@ function formatReportCategory(category: string) {
 }
 
 type AdminPageProps = {
-  searchParams: Promise<{ post?: string }>;
+  searchParams: Promise<{ post?: string; page?: string; status?: string }>;
 };
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
@@ -56,6 +55,42 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   }
 
   const { viewer, requests, reports, posts, postSearch } = data;
+  const pageSize = 15;
+  const status = query.status === "new" || query.status === "approved" || query.status === "rejected" ? query.status : "all";
+  const currentPage = Math.max(1, Number.parseInt(query.page || "1", 10) || 1);
+  const filteredReports = reports.filter((report) => {
+    if (status === "new") return report.status === "open";
+    if (status === "approved") return report.status === "resolved";
+    if (status === "rejected") return report.status === "dismissed";
+    return true;
+  });
+  const totalReports = filteredReports.length;
+  const totalPages = Math.max(1, Math.ceil(totalReports / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const visibleReports = filteredReports.slice(startIndex, startIndex + pageSize);
+  const startNumber = totalReports ? startIndex + 1 : 0;
+  const endNumber = Math.min(startIndex + visibleReports.length, totalReports);
+  const makeReportHref = (nextStatus: string, nextPage: number) => {
+    const params = new URLSearchParams();
+
+    if (nextStatus !== "all") {
+      params.set("status", nextStatus);
+    }
+
+    if (nextPage > 1) {
+      params.set("page", String(nextPage));
+    }
+
+    const qs = params.toString();
+    return qs ? `/admin?${qs}` : "/admin";
+  };
+  const reportTabs = [
+    { key: "new", label: "Новые" },
+    { key: "approved", label: "Принятые" },
+    { key: "rejected", label: "Отклоненные" },
+    { key: "all", label: "Все" },
+  ] as const;
   const pendingRequests = requests.filter((request) => request.status === "pending");
   const historyRequests = requests.filter((request) => request.status !== "pending");
 
@@ -85,9 +120,50 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         title="Жалобы на посты"
         description="Все жалобы из меню постов попадают сюда. Можно принять жалобу или отклонить её."
       >
-        {reports.length ? (
+        <div className="mb-4 grid gap-3">
+          <div className="grid grid-cols-1 gap-2 rounded-[26px] border border-[var(--line)] bg-[var(--panel-strong)] p-2 sm:grid-cols-4 sm:rounded-full">
+            {reportTabs.map((tab) => (
+              <Link
+                key={tab.key}
+                href={makeReportHref(tab.key, 1)}
+                className={`rounded-full px-4 py-3 text-center text-sm font-medium transition ${
+                  status === tab.key
+                    ? "bg-white/[0.08] text-[var(--text)]"
+                    : "text-[var(--muted)] hover:bg-white/[0.03] hover:text-[var(--text)]"
+                }`}
+              >
+                {tab.label}
+              </Link>
+            ))}
+          </div>
+          <div className="flex items-center justify-between gap-3 text-sm text-[var(--muted)]">
+            <div>{totalReports ? `Показано ${startNumber}-${endNumber} из ${totalReports}` : "Показано 0 из 0"}</div>
+            <div className="flex items-center gap-2">
+              <Link
+                href={makeReportHref(status, Math.max(1, safePage - 1))}
+                aria-disabled={safePage <= 1}
+                className={`rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-medium ${
+                  safePage <= 1 ? "pointer-events-none opacity-50" : "hover:bg-white/[0.04] hover:text-[var(--text)]"
+                }`}
+              >
+                Назад
+              </Link>
+              <Link
+                href={makeReportHref(status, Math.min(totalPages, safePage + 1))}
+                aria-disabled={safePage >= totalPages}
+                className={`rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-medium ${
+                  safePage >= totalPages ? "pointer-events-none opacity-50" : "hover:bg-white/[0.04] hover:text-[var(--text)]"
+                }`}
+              >
+                Вперёд
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {visibleReports.length ? (
           <div className="grid gap-4">
-            {reports.map((report) => (
+            {visibleReports.map((report) => (
               <article key={report.id} className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-soft)] p-4">
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -295,9 +371,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   </div>
                 </div>
                 <PostCard post={post} viewer={viewer} />
-                <div className="flex justify-end">
-                  <AdminDeletePostButton postId={post.id} />
-                </div>
               </div>
             ))}
           </div>

@@ -2,6 +2,7 @@
 
 # dependencies
 /.idea/
+/.mimocode/
 /node_modules
 /.pnp
 .pnp.*

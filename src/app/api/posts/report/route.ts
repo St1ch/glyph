@@ -4,7 +4,7 @@ import { getViewer, reportPost } from "@/lib/data";
 
 const schema = z.object({
   postId: z.string().min(1),
-  category: z.enum(["spam", "abuse", "adult", "violence", "misinformation", "other"]),
+  reason: z.enum(["spam", "abuse", "adult", "violence", "misinformation", "other"]),
   details: z.string().trim().max(500).default(""),
 });
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const payload = schema.parse(await request.json());
-    await reportPost(payload.postId, viewer.id, payload.category, payload.details.trim() || null);
+    await reportPost(payload.postId, viewer.id, payload.reason, payload.details.trim() || null);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

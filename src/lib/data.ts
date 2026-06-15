@@ -472,7 +472,7 @@ function mapPostReport(row: PostReportRow): PostReport {
     id: row.id,
     postId: row.post_id,
     reporterUserId: row.reporter_user_id,
-    category: row.category,
+    category: (row as PostReportRow & { reason?: PostReportCategory }).reason ?? row.category,
     details: row.details,
     status: row.status,
     createdAt: toIso(row.created_at)!,
@@ -652,7 +652,7 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
       postIds,
     ),
     queryRows<PostReportRow>(
-      `SELECT id, post_id, reporter_user_id, category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
+      `SELECT id, post_id, reporter_user_id, COALESCE(reason, category) AS category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
        FROM post_reports
        WHERE post_id IN (${postPlaceholders})`,
       postIds,
@@ -1690,7 +1690,7 @@ export async function getAdminData(search = "") {
       `SELECT * FROM verification_requests ORDER BY submitted_at DESC`,
     ),
     queryRows<PostReportRow>(
-      `SELECT id, post_id, reporter_user_id, category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
+      `SELECT id, post_id, reporter_user_id, COALESCE(reason, category) AS category, ${hasReportDetails ? "details" : "NULL AS details"}, status, created_at, reviewed_at
        FROM post_reports ORDER BY
          CASE status
            WHEN 'open' THEN 0
@@ -2257,7 +2257,7 @@ export async function deletePostAsAdmin(postId: string, adminUserId: string) {
 export async function reportPost(
   postId: string,
   reporterUserId: string,
-  category: PostReportCategory,
+  reason: PostReportCategory,
   details: string | null = null,
 ) {
   const hasReportDetails = await hasPostReportDetailsColumn();
@@ -2286,11 +2286,11 @@ export async function reportPost(
       await txExecute(
         connection,
         hasReportDetails
-          ? `UPDATE post_reports SET category = ?, details = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`
-          : `UPDATE post_reports SET category = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`,
+          ? `UPDATE post_reports SET reason = ?, details = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`
+          : `UPDATE post_reports SET reason = ?, status = 'open', created_at = ?, reviewed_at = NULL WHERE id = ?`,
         hasReportDetails
-          ? [category, details, new Date(), existing.id]
-          : [category, new Date(), existing.id],
+          ? [reason, details, new Date(), existing.id]
+          : [reason, new Date(), existing.id],
       );
 
       return { id: existing.id };
@@ -2300,13 +2300,13 @@ export async function reportPost(
     await txExecute(
       connection,
       hasReportDetails
-        ? `INSERT INTO post_reports (id, post_id, reporter_user_id, category, details, status, created_at, reviewed_at)
+        ? `INSERT INTO post_reports (id, post_id, reporter_user_id, reason, details, status, created_at, reviewed_at)
            VALUES (?, ?, ?, ?, ?, 'open', ?, NULL)`
-        : `INSERT INTO post_reports (id, post_id, reporter_user_id, category, status, created_at, reviewed_at)
+        : `INSERT INTO post_reports (id, post_id, reporter_user_id, reason, status, created_at, reviewed_at)
            VALUES (?, ?, ?, ?, 'open', ?, NULL)`,
       hasReportDetails
-        ? [reportId, postId, reporterUserId, category, details, new Date()]
-        : [reportId, postId, reporterUserId, category, new Date()],
+        ? [reportId, postId, reporterUserId, reason, details, new Date()]
+        : [reportId, postId, reporterUserId, reason, new Date()],
     );
 
     const admins = await txQueryRows<UserRow>(
@@ -2321,7 +2321,7 @@ export async function reportPost(
         buildNotification(
           admin.id,
           "Новая жалоба на пост",
-          `${reporter.name} отправил(а) жалобу категории «${getReportCategoryLabel(category)}».`,
+          `${reporter.name} отправил(а) жалобу категории «${getReportCategoryLabel(reason)}».`,
           "/admin",
         ),
         { force: true },
