@@ -742,6 +742,7 @@ export function PostActionsMenu({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState(false);
@@ -814,27 +815,8 @@ export function PostActionsMenu({
               disabled={isAdminPage ? pending : disabledReport}
               onClick={() => {
                 if (isAdminPage) {
-                  const confirmed = window.confirm("Удалить этот пост? Это действие нельзя отменить.");
-
-                  if (!confirmed) {
-                    return;
-                  }
-
-                  setPending(true);
-
-                  requestJson("/api/admin/posts/delete", { postId })
-                    .then(() => {
-                      setIsOpen(false);
-                      window.dispatchEvent(new Event("feed:changed"));
-                      window.location.reload();
-                    })
-                    .catch((value) => {
-                      window.alert(value instanceof Error ? value.message : "Не удалось удалить пост.");
-                    })
-                    .finally(() => {
-                      setPending(false);
-                    });
-
+                  setIsOpen(false);
+                  setIsDeleteConfirmOpen(true);
                   return;
                 }
 
@@ -848,6 +830,47 @@ export function PostActionsMenu({
           </div>
         ) : null}
       </div>
+
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Удалить пост">
+        <div className="grid gap-4">
+          <div className="rounded-[20px] border border-rose-500/20 bg-rose-500/10 px-4 py-4 text-sm leading-6 text-rose-200">
+            Удалить этот пост? Это действие нельзя отменить.
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="rounded-full border border-[var(--line)] px-4 py-3 text-sm font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setPending(true);
+
+                requestJson("/api/admin/posts/delete", { postId })
+                  .then(() => {
+                    setIsDeleteConfirmOpen(false);
+                    window.dispatchEvent(new Event("feed:changed"));
+                    window.location.reload();
+                  })
+                  .catch((value) => {
+                    window.alert(value instanceof Error ? value.message : "Не удалось удалить пост.");
+                  })
+                  .finally(() => {
+                    setPending(false);
+                  });
+              }}
+              className="rounded-full bg-rose-500 px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {pending ? "Удаляем..." : "Удалить пост"}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} title="Пожаловаться на пост">
         <form
