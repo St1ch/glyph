@@ -310,11 +310,12 @@ export async function isUserViewingConversation(userId: string, conversationId: 
 }
 
 export async function getRealtimeConnectionUrl(request: Request) {
+  const state = await ensureRealtimeServer();
+
   if (process.env.NEXT_PUBLIC_REALTIME_URL) {
     return process.env.NEXT_PUBLIC_REALTIME_URL;
   }
 
-  const state = await ensureRealtimeServer();
   const currentUrl = new URL(request.url);
   const protocol = currentUrl.protocol === "https:" ? "wss:" : "ws:";
   const hostname = currentUrl.hostname;
