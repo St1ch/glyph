@@ -685,13 +685,13 @@ async function getDecoratedPosts(whereSql: string, params: SqlValue[], viewerId?
     ),
   ]);
 
-  const pollIds = polls.map((poll) => poll.id);
-  const votes = pollIds.length
+  const optionIds = options.map((option) => option.id);
+  const votes = optionIds.length
     ? await queryRows<VoteRow>(
         `SELECT pv.option_id, pv.user_id
          FROM poll_votes pv
-         WHERE pv.option_id IN (${placeholders(pollIds)})`,
-        pollIds,
+         WHERE pv.option_id IN (${placeholders(optionIds)})`,
+        optionIds,
       )
     : [];
 

@@ -1369,6 +1369,9 @@ export function RepostButton({
 export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [selectedOptionId, setSelectedOptionId] = useState(
+    post.poll?.options.find((option) => option.voterIds.some((id) => id === post.authorId))?.id ?? "",
+  );
 
   if (!post.poll) {
     return null;
@@ -1379,11 +1382,13 @@ export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?
       return;
     }
 
+    setSelectedOptionId(optionId);
     startTransition(async () => {
       try {
         await requestJson("/api/posts/vote", { postId: post.id, optionId });
         router.refresh();
       } catch (error) {
+        setSelectedOptionId("");
         window.alert(error instanceof Error ? error.message : "Не удалось отправить голос.");
       }
     });
@@ -1405,6 +1410,7 @@ export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?
           }}
           className={joinClasses(
             "rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]",
+            selectedOptionId === option.id ? "border-[var(--accent)] bg-[var(--accent)]/14 text-[var(--text)]" : "",
             disabled || pending ? "opacity-50" : "",
           )}
         >
