@@ -1374,6 +1374,21 @@ export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?
     return null;
   }
 
+  const vote = (optionId: string) => {
+    if (disabled || pending) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await requestJson("/api/posts/vote", { postId: post.id, optionId });
+        router.refresh();
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Не удалось отправить голос.");
+      }
+    });
+  };
+
   return (
     <div className="mt-3 flex flex-wrap gap-2">
       {post.poll.options.map((option) => (
@@ -1382,18 +1397,12 @@ export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?
           type="button"
           aria-disabled={disabled || pending}
           data-no-post-open="true"
-          onClickCapture={(event) => event.stopPropagation()}
           onPointerDownCapture={(event) => event.stopPropagation()}
-          onClick={() =>
-            startTransition(async () => {
-              try {
-                await requestJson("/api/posts/vote", { postId: post.id, optionId: option.id });
-                router.refresh();
-              } catch (error) {
-                window.alert(error instanceof Error ? error.message : "Не удалось отправить голос.");
-              }
-            })
-          }
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            vote(option.id);
+          }}
           className={joinClasses(
             "rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]",
             disabled || pending ? "opacity-50" : "",
