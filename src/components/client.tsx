@@ -1381,6 +1381,8 @@ export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?
           key={option.id}
           type="button"
           disabled={disabled || pending}
+          data-no-post-open="true"
+          onClickCapture={(event) => event.stopPropagation()}
           onClick={() =>
             startTransition(async () => {
               try {
