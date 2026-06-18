@@ -1380,9 +1380,10 @@ export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?
         <button
           key={option.id}
           type="button"
-          disabled={disabled || pending}
+          aria-disabled={disabled || pending}
           data-no-post-open="true"
           onClickCapture={(event) => event.stopPropagation()}
+          onPointerDownCapture={(event) => event.stopPropagation()}
           onClick={() =>
             startTransition(async () => {
               try {
@@ -1393,7 +1394,10 @@ export function VoteButtons({ post, disabled }: { post: DecoratedPost; disabled?
               }
             })
           }
-          className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)] disabled:opacity-50"
+          className={joinClasses(
+            "rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-white/[0.04] hover:text-[var(--text)]",
+            disabled || pending ? "opacity-50" : "",
+          )}
         >
           {option.label}
         </button>
