@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const csrfCookieName = "__Host-glyph_csrf";
 const protectedMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const csrfExemptPaths = new Set([
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/password-reset/confirm",
+  "/api/account/password-reset",
+]);
 
 function makeToken() {
   return crypto.randomUUID().replaceAll("-", "");
@@ -22,7 +28,11 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  if (request.nextUrl.pathname.startsWith("/api/") && protectedMethods.has(request.method)) {
+  if (
+    request.nextUrl.pathname.startsWith("/api/") &&
+    protectedMethods.has(request.method) &&
+    !csrfExemptPaths.has(request.nextUrl.pathname)
+  ) {
     const origin = request.headers.get("origin");
     const expectedOrigin = request.nextUrl.origin;
 
