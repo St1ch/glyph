@@ -180,11 +180,17 @@ async function requestJson<T>(
   body: Record<string, unknown>,
   init?: RequestInit,
 ): Promise<T> {
+  const csrfToken = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith("__Host-glyph_csrf="))
+    ?.split("=")[1] ?? "";
+
   const response = await fetch(url, {
     method: "POST",
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      "X-CSRF-Token": csrfToken,
     },
       body: JSON.stringify(body),
       ...init,

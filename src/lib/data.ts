@@ -42,7 +42,7 @@ import { detectImageFormat } from "@/lib/image-signature";
 const storageDir = path.join(process.cwd(), "storage");
 const uploadsDir = path.join(storageDir, "uploads");
 
-const sessionCookieName = "glyph_session";
+const sessionCookieName = "__Host-glyph_session";
 const sessionTtlDays = 30;
 const pwaSessionTtlDays = 3650;
 
@@ -2071,7 +2071,7 @@ export function getSessionCookieOptions(options?: { pwa?: boolean }) {
 
   return {
     httpOnly: true,
-    sameSite: "lax" as const,
+    sameSite: "strict" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 24 * ttlDays,
