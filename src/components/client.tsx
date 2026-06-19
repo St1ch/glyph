@@ -93,6 +93,15 @@ type RealtimeIncomingEvent =
 
 type UploadKind = "avatar" | "cover" | "post" | "message" | "verification";
 
+function getCsrfToken() {
+  return (
+    document.cookie
+      .split("; ")
+      .find((entry) => entry.startsWith("__Host-glyph_csrf="))
+      ?.split("=")[1] ?? ""
+  );
+}
+
 function getUploadLimitText(kind: UploadKind) {
   const maxMb = Math.round(uploadLimits[kind] / (1024 * 1024));
 
@@ -142,6 +151,10 @@ async function uploadFile(file: File, kind: UploadKind) {
 
   const response = await fetch("/api/upload", {
     method: "POST",
+    credentials: "include",
+    headers: {
+      "X-CSRF-Token": getCsrfToken(),
+    },
     body: formData,
   });
 
@@ -180,47 +193,43 @@ async function requestJson<T>(
   body: Record<string, unknown>,
   init?: RequestInit,
 ): Promise<T> {
-  const csrfToken = document.cookie
-    .split("; ")
-    .find((entry) => entry.startsWith("__Host-glyph_csrf="))
-    ?.split("=")[1] ?? "";
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  headers.set("X-CSRF-Token", getCsrfToken());
 
   const response = await fetch(url, {
+    ...init,
     method: "POST",
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CSRF-Token": csrfToken,
-    },
-      body: JSON.stringify(body),
-      ...init,
-    });
+    headers,
+    body: JSON.stringify(body),
+  });
 
-    const raw = await response.text();
-    let data: (T & RequestError) | null = null;
+  const raw = await response.text();
+  let data: (T & RequestError) | null = null;
 
-    if (raw) {
-      try {
-        data = JSON.parse(raw) as T & RequestError;
-      } catch {
-        data = null;
-      }
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as T & RequestError;
+    } catch {
+      data = null;
     }
-
-    if (!response.ok) {
-      if (response.status === 504) {
-        throw new Error("Сервер слишком долго отвечает. Проверьте SMTP на сервере и попробуйте снова.");
-      }
-
-      throw new Error(data?.error || data?.message || "Что-то пошло не так.");
-    }
-
-    if (!data) {
-      throw new Error("Сервер вернул некорректный ответ.");
-    }
-
-    return data;
   }
+
+  if (!response.ok) {
+    if (response.status === 504) {
+      throw new Error("Сервер слишком долго отвечает. Проверьте SMTP на сервере и попробуйте снова.");
+    }
+
+    throw new Error(data?.error || data?.message || "Что-то пошло не так.");
+  }
+
+  if (!data) {
+    throw new Error("Сервер вернул некорректный ответ.");
+  }
+
+  return data;
+}
 
 function applyTheme(theme: ThemePreference) {
   const resolved =
@@ -517,7 +526,13 @@ export function LogoutButton() {
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          await fetch("/api/auth/logout", { method: "POST" });
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "X-CSRF-Token": getCsrfToken(),
+            },
+          });
           router.push("/");
           router.refresh();
         })

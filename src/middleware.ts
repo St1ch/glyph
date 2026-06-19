@@ -13,6 +13,23 @@ function makeToken() {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
+function getAllowedOrigins(request: NextRequest) {
+  const origins = new Set([request.nextUrl.origin]);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (appUrl) {
+    origins.add(appUrl);
+  }
+
+  if (request.nextUrl.hostname.startsWith("www.")) {
+    origins.add(`${request.nextUrl.protocol}//${request.nextUrl.hostname.slice(4)}`);
+  } else {
+    origins.add(`${request.nextUrl.protocol}//www.${request.nextUrl.host}`);
+  }
+
+  return origins;
+}
+
 export function middleware(request: NextRequest) {
   const response = NextResponse.next();
   const token = request.cookies.get(csrfCookieName)?.value || makeToken();
@@ -34,9 +51,8 @@ export function middleware(request: NextRequest) {
     !csrfExemptPaths.has(request.nextUrl.pathname)
   ) {
     const origin = request.headers.get("origin");
-    const expectedOrigin = request.nextUrl.origin;
 
-    if (origin && origin !== expectedOrigin) {
+    if (origin && !getAllowedOrigins(request).has(origin)) {
       return NextResponse.json({ error: "CSRF origin rejected." }, { status: 403 });
     }
 
