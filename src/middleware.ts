@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const csrfCookieName = "__Host-glyph_csrf";
+const csrfCookieName = process.env.NODE_ENV === "production" ? "__Host-glyph_csrf" : "glyph_csrf";
 const protectedMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const csrfExemptPaths = new Set([
   "/api/auth/login",

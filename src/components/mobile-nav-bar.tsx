@@ -98,7 +98,7 @@ export function MobileNavBar({
   }, [pathname, viewerId]);
 
   return (
-    <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-50 border-t border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_88%,transparent)] backdrop-blur lg:hidden">
+    <nav className="app-mobile-nav fixed inset-x-0 bottom-[env(safe-area-inset-bottom,0px)] z-50 border-t border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_88%,transparent)] backdrop-blur lg:hidden">
       <div
         className="mx-auto grid max-w-[640px] px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.35rem)] pt-2"
         style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}

@@ -108,11 +108,12 @@ body::-webkit-scrollbar-thumb {
 
 body:has(.messages-page) {
   overflow: hidden;
+  --mobile-nav-height: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 body:has(.messages-page) .app-shell {
   max-width: none;
-  height: 100vh;
+  height: 100dvh;
   margin-inline: 0;
   gap: 0;
   padding-inline: 0;
@@ -120,7 +121,7 @@ body:has(.messages-page) .app-shell {
 
 body:has(.messages-page) .app-sidebar {
   position: static;
-  height: 100vh;
+  height: 100dvh;
   width: 260px;
   padding: 1rem;
   border-right: 1px solid var(--line);
@@ -129,7 +130,7 @@ body:has(.messages-page) .app-sidebar {
 
 body:has(.messages-page) .app-main {
   min-height: 0;
-  height: 100vh;
+  height: 100dvh;
 }
 
 body:has(.messages-page) .app-content {
@@ -147,7 +148,7 @@ body:has(.messages-page) .app-mobile-header {
 
 @media (max-width: 1023px) {
   body:has(.messages-page) .app-main {
-    height: calc(100vh - 5rem);
+    height: calc(100dvh - var(--mobile-nav-height));
   }
 
   body:has(.messages-page) .app-content {
@@ -156,11 +157,30 @@ body:has(.messages-page) .app-mobile-header {
 
   .messages-page {
     height: 100%;
+    min-height: calc(100dvh - var(--mobile-nav-height));
     padding-bottom: 0;
   }
 
   .message-chat-surface {
     min-height: 0;
+  }
+}
+
+@supports not (height: 100dvh) {
+  body:has(.messages-page) .app-shell,
+  body:has(.messages-page) .app-sidebar,
+  body:has(.messages-page) .app-main {
+    height: 100vh;
+  }
+
+  @media (max-width: 1023px) {
+    body:has(.messages-page) .app-main {
+      height: calc(100vh - var(--mobile-nav-height));
+    }
+
+    .messages-page {
+      min-height: calc(100vh - var(--mobile-nav-height));
+    }
   }
 }
 

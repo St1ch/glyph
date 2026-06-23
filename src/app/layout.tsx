@@ -94,7 +94,7 @@ export default async function RootLayout({
         {viewer ? <RealtimeBridge viewerId={viewer.id} /> : null}
         {viewer ? <DesktopSiteNotifications viewerId={viewer.id} enabled={viewer.notificationsEnabled} /> : null}
 
-        <header className="app-mobile-header fixed inset-x-0 top-0 z-40 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
+        <header className="app-mobile-header fixed inset-x-0 top-0 z-40 h-16 border-b border-[var(--line)] bg-[color:color-mix(in_srgb,var(--page)_82%,transparent)] backdrop-blur lg:hidden">
           <div className="mx-auto flex w-full max-w-[1040px] items-center justify-between px-4 py-3 min-[2400px]:max-w-[1360px]">
             <Link href="/" className="flex items-center gap-2">
               <span className="text-xl font-semibold tracking-tight">{siteConfig.name}</span>
@@ -165,7 +165,7 @@ export default async function RootLayout({
           </aside>
 
           <main className="app-main flex min-h-screen min-w-0 flex-1 flex-col">
-            <div className="app-content w-full pb-24 pt-16 lg:pb-8 lg:pt-4">{children}</div>
+            <div className="app-content w-full pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-16 lg:pb-8 lg:pt-4">{children}</div>
           </main>
         </div>
 

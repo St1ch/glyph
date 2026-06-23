@@ -97,7 +97,7 @@ function getCsrfToken() {
   return (
     document.cookie
       .split("; ")
-      .find((entry) => entry.startsWith("__Host-glyph_csrf="))
+      .find((entry) => entry.startsWith("__Host-glyph_csrf=") || entry.startsWith("glyph_csrf="))
       ?.split("=")[1] ?? ""
   );
 }
@@ -2695,7 +2695,7 @@ export function MessagesPanel({
 
       <section
         className={joinClasses(
-          "message-chat-surface min-h-[620px] min-w-0 flex-col overflow-hidden lg:flex lg:min-h-0",
+          "message-chat-surface min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex",
           activeConversation ? "flex" : "hidden",
         )}
       >
@@ -2806,7 +2806,7 @@ export function MessagesPanel({
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-8">
               {visibleMessages.length ? (
                 <div className="mx-auto grid max-w-[980px] gap-2">
                   {visibleMessages.map((message, index) => {
@@ -2912,7 +2912,10 @@ export function MessagesPanel({
               )}
             </div>
 
-            <form onSubmit={sendMessage} className="border-t border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_78%,black)] px-4 py-3 backdrop-blur">
+            <form
+              onSubmit={sendMessage}
+              className="border-t border-[var(--line)] bg-[color:color-mix(in_srgb,var(--panel)_78%,black)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur"
+            >
               <div className="mx-auto grid max-w-[980px] gap-2">
                 {replyTarget || editingMessage ? (
                   <div className="flex items-start justify-between gap-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-xs text-[var(--muted)]">
